@@ -9,7 +9,6 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import { useCatalogStore } from '../store/useCatalogStore';
-import { useWishlistStore } from '../store/useWishlistStore';
 import { ProductCard } from '../components/product/ProductCard';
 
 // Anime Universes Grid for fast filtering
@@ -69,7 +68,6 @@ export const Home: React.FC = () => {
   const products = useCatalogStore((s) => s.products);
   const productsLoading = useCatalogStore((s) => s.productsLoading);
   const initializeCatalog = useCatalogStore((s) => s.initializeCatalog);
-  const { toggleWishlist, isInWishlist } = useWishlistStore();
 
   useEffect(() => {
     initializeCatalog();
@@ -167,9 +165,7 @@ export const Home: React.FC = () => {
                 product={product}
                 onNavigate={(slug) => navigate(`/product/${slug}`)}
                 showFeaturedBadge={Boolean(product.featured)}
-                showWishlist={true}
-                isWishlisted={isInWishlist(product.id)}
-                onToggleWishlist={toggleWishlist}
+                showWishlist={false}
               />
             ))}
           </div>

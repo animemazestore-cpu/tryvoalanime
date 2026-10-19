@@ -975,6 +975,11 @@ export const Checkout: React.FC = () => {
                         <p className="text-xs text-amber-600">
                           Complete the payment on the checkout page. This screen will update automatically.
                         </p>
+                        {tgOrderId && (
+                          <p className="text-[10px] text-amber-700/70 font-mono mt-1">
+                            Gateway Order ID: {tgOrderId}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <a
