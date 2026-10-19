@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -17,12 +17,14 @@ import {
   MapPin,
   Check,
   Package,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import {
-  loadRazorpaySDK,
-  createRazorpayOrder,
-  verifyRazorpayPayment,
-} from '../lib/razorpay';
+  createTrustGatewayOrder,
+  checkTrustGatewayStatus,
+  getCheckoutUrl,
+} from '../lib/trustgateway';
 import { checkRateLimit, recordRateLimitAttempt } from '../lib/rateLimiter';
 import { dispatchOrderToQikink, getQikinkConfig } from '../lib/qikink';
 
@@ -92,6 +94,13 @@ export const Checkout: React.FC = () => {
   const [orderCreatedId, setOrderCreatedId] = useState<string | null>(null);
   const [orderPaymentId, setOrderPaymentId] = useState<string | null>(null);
   const [orderDeliveryDate, setOrderDeliveryDate] = useState<string | null>(null);
+
+  // TrustGateway specific state
+  const [tgOrderId, setTgOrderId] = useState<string | null>(null);
+  const [tgCheckoutUrl, setTgCheckoutUrl] = useState<string | null>(null);
+  const [tgQrUrl, setTgQrUrl] = useState<string | null>(null);
+  const [pollingActive, setPollingActive] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Enforce mandatory authentication: user must be logged in to checkout
   useEffect(() => {
@@ -337,8 +346,48 @@ export const Checkout: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Step 3 Execution: Handle Razorpay Checkout
-  const handleRazorpayCheckout = async () => {
+  // Stop polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  // Poll TrustGateway for payment confirmation
+  const startPolling = useCallback(
+    (gatewayOrderId: string, localOrderId: string) => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      setPollingActive(true);
+
+      pollingRef.current = setInterval(async () => {
+        try {
+          const result = await checkTrustGatewayStatus(gatewayOrderId);
+
+          if (result.paid === true && result.data?.order_id === gatewayOrderId) {
+            // Payment confirmed!
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setPollingActive(false);
+            setPaymentStatus('paid');
+
+            const paymentId = result.data.transaction_id || result.data.utr || gatewayOrderId;
+            setOrderPaymentId(paymentId);
+
+            await persistConfirmedOrder(localOrderId, paymentId, 'TrustGateway UPI');
+            setCurrentStep(4);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setLoading(false);
+          }
+        } catch (err) {
+          console.warn('[TrustGateway] Poll error (will retry):', err);
+        }
+      }, 5000); // Poll every 5 seconds
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, fullName, phone, email, address, landmark, city, state, pincode, country, user, total]
+  );
+
+  // Step 3 Execution: Handle TrustGateway UPI Checkout
+  const handleTrustGatewayCheckout = async () => {
     // Rate limiting abuse prevention
     const rateCheck = checkRateLimit('checkout_payment', {
       maxRequests: 5,
@@ -355,149 +404,34 @@ export const Checkout: React.FC = () => {
     setErrorMsg('');
 
     try {
-      // 1. Load Razorpay Checkout SDK
-      const sdkReady = await loadRazorpaySDK();
-      if (!sdkReady) {
-        throw new Error(
-          'Unable to load Razorpay payment gateway. Please check your internet connection or try again.'
-        );
-      }
+      // Generate local order reference
+      const localOrderId = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      setOrderCreatedId(localOrderId);
 
-      // 2. Create server-side order
-      const serverOrder = await createRazorpayOrder({
-        items: items.map((it) => ({
-          product: {
-            id: it.product.id,
-            name: it.product.name,
-            price: it.product.price,
-            slug: it.product.slug,
-            shipping_fee: it.product.shipping_fee ?? 0,
-          },
-          quantity: it.quantity,
-          variantPrice: it.variantPrice,
-          selectedVariant: it.selectedVariant,
-          selectedVariantId: it.selectedVariantId,
-          selectedAttributes: it.selectedAttributes,
-        })),
-        shippingAddress: {
-          fullName,
-          phone,
-          email,
-          address,
-          landmark,
-          city,
-          state,
-          pincode,
-          country,
-        },
-        couponCode: appliedCoupon?.code,
-        user_id: user?.id,
+      const deliveryDate = new Date();
+      deliveryDate.setDate(deliveryDate.getDate() + 5);
+      setOrderDeliveryDate(deliveryDate.toISOString());
+
+      // Create TrustGateway order
+      const tgResult = await createTrustGatewayOrder({
+        amount: total.toFixed(2),
+        note: `Tryvoal Order ${localOrderId}`,
       });
 
-      if (!serverOrder.success) {
-        throw new Error(serverOrder.error || 'Failed to initialize payment order');
+      if (!tgResult.success || !tgResult.data) {
+        throw new Error(tgResult.error || 'Failed to create payment order. Please try again.');
       }
 
-      const orderRefId = serverOrder.orderId;
-      setOrderCreatedId(orderRefId);
-      setOrderDeliveryDate(serverOrder.estimatedDeliveryDate);
+      const { order_id, checkout_url, qr_url } = tgResult.data;
+      setTgOrderId(order_id);
+      setTgCheckoutUrl(getCheckoutUrl(checkout_url));
+      setTgQrUrl(qr_url);
 
-      // 3. Configure Razorpay modal options
-      const isRealOrderId =
-        Boolean(serverOrder.razorpayOrderId) &&
-        typeof serverOrder.razorpayOrderId === 'string' &&
-        serverOrder.razorpayOrderId.startsWith('order_') &&
-        !serverOrder.razorpayOrderId.startsWith('order_test_') &&
-        !serverOrder.razorpayOrderId.startsWith('order_dev_');
+      // Open the hosted checkout in a new tab
+      window.open(getCheckoutUrl(checkout_url), '_blank');
 
-      const options: any = {
-        key: serverOrder.keyId,
-        amount: serverOrder.amount,
-        currency: serverOrder.currency || 'INR',
-        name: 'TRYVOAL',
-        description: `Order Ref: ${orderRefId}`,
-        image: '/logo.png',
-        ...(isRealOrderId ? { order_id: serverOrder.razorpayOrderId } : {}),
-        prefill: {
-          name: fullName,
-          email: email,
-          contact: phone,
-        },
-        notes: {
-          order_id: orderRefId,
-          user_id: user?.id || 'guest',
-          
-        },
-        theme: {
-          color: '#1e3a8a',
-        },
-        modal: {
-          ondismiss: () => {
-            setLoading(false);
-            setErrorMsg('Payment cancelled. Your entered information and cart remain saved.');
-          },
-        },
-        handler: async (response: {
-          razorpay_payment_id: string;
-          razorpay_order_id?: string;
-          razorpay_signature?: string;
-        }) => {
-          try {
-            setLoading(true);
-            const verifyRes = await verifyRazorpayPayment({
-              orderId: orderRefId,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpayOrderId: response.razorpay_order_id || serverOrder.razorpayOrderId || '',
-              razorpaySignature: response.razorpay_signature || '',
-            });
-
-            if (verifyRes.success) {
-              setPaymentStatus('paid');
-              setOrderPaymentId(response.razorpay_payment_id);
-              await persistConfirmedOrder(
-                orderRefId,
-                response.razorpay_payment_id,
-                'Razorpay'
-              );
-              setCurrentStep(4);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-              setErrorMsg(
-                verifyRes.error ||
-                  'Payment verification returned failure. If your account was debited, contact customer care.'
-              );
-            }
-          } catch (verifyErr: any) {
-            console.error('Verification error:', verifyErr);
-            setErrorMsg('Payment verification encountered an issue.');
-          } finally {
-            setLoading(false);
-          }
-        },
-      };
-
-      // 4. Open Razorpay modal
-      if ((window as any).Razorpay) {
-        const rzp = new (window as any).Razorpay(options);
-        rzp.on('payment.failed', (resp: any) => {
-          console.warn('Payment failed:', resp.error);
-          setErrorMsg(
-            resp.error?.description || 'Payment failed. Please choose another payment method.'
-          );
-          setLoading(false);
-        });
-        rzp.open();
-      } else {
-        // Fallback simulation in headless / mock development environment
-        console.warn('Razorpay SDK window unavailable, completing simulation fallback');
-        setPaymentStatus('paid');
-        const simPayId = `pay_sim_${Date.now()}`;
-        setOrderPaymentId(simPayId);
-        await persistConfirmedOrder(orderRefId, simPayId, 'Razorpay (Simulated)');
-        setCurrentStep(4);
-        setLoading(false);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+      // Start polling for payment confirmation
+      startPolling(order_id, localOrderId);
     } catch (err: any) {
       console.error('Checkout error:', err);
       setErrorMsg(err.message || 'Something went wrong during checkout.');
@@ -963,7 +897,7 @@ export const Checkout: React.FC = () => {
                     <span>Step 3: Review & Secure Payment</span>
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Review your delivery destination and finalize secure payment via Razorpay.
+                    Review your delivery destination and pay securely via UPI checkout.
                   </p>
                 </div>
 
@@ -989,7 +923,7 @@ export const Checkout: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Razorpay Gateway Card */}
+                {/* TrustGateway UPI Gateway Card */}
                 <div className="p-5 rounded-xl border-2 border-primary bg-primary/5 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -998,35 +932,79 @@ export const Checkout: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-sm font-bold text-gray-900 block">
-                          Razorpay Secure Gateway
+                          Trust Gateway — UPI Checkout
                         </span>
                         <span className="text-[11px] text-gray-500 block">
-                          All Indian payment methods accepted with zero extra surcharge
+                          Secure hosted UPI payment with instant verification
                         </span>
                       </div>
                     </div>
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-white">
-                      VERIFIED
+                      SECURE
                     </span>
                   </div>
 
                   <div className="pt-2 border-t border-primary/15 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-700">
                     <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-md shadow-2xs">
-                      ⚡ UPI (GPay, PhonePe, Paytm, BHIM)
+                      ⚡ Google Pay
                     </span>
                     <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-md shadow-2xs">
-                      💳 Credit & Debit Cards (Visa, MC, RuPay)
+                      ⚡ PhonePe
                     </span>
                     <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-md shadow-2xs">
-                      🏦 NetBanking (50+ Banks)
+                      ⚡ Paytm
+                    </span>
+                    <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-md shadow-2xs">
+                      ⚡ BHIM UPI
+                    </span>
+                    <span className="px-2.5 py-1 bg-white border border-gray-200 rounded-md shadow-2xs">
+                      📱 Any UPI App
                     </span>
                   </div>
                 </div>
 
+                {/* Polling status — shown after checkout is initiated */}
+                {pollingActive && tgCheckoutUrl && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <Loader2 className="h-5 w-5 text-amber-600 animate-spin" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-800">
+                          Waiting for your payment...
+                        </p>
+                        <p className="text-xs text-amber-600">
+                          Complete the payment on the checkout page. This screen will update automatically.
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={tgCheckoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Re-open checkout page
+                    </a>
+                    {tgQrUrl && (
+                      <div className="pt-3 border-t border-amber-200">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
+                          Or scan QR code to pay
+                        </p>
+                        <img
+                          src={tgQrUrl}
+                          alt="UPI QR Code"
+                          className="w-40 h-40 rounded-lg border border-gray-200 bg-white p-1"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2.5 text-xs text-gray-600">
                   <Lock className="h-4 w-4 text-primary flex-shrink-0" />
                   <span>
-                    256-bit encrypted checkout. Card details are processed directly by RBI-licensed Razorpay.
+                    Hosted UPI checkout by Trust Gateway. Your payment details never touch our servers.
                   </span>
                 </div>
 
@@ -1036,6 +1014,8 @@ export const Checkout: React.FC = () => {
                     type="button"
                     variant="outline"
                     onClick={() => {
+                      if (pollingRef.current) clearInterval(pollingRef.current);
+                      setPollingActive(false);
                       setCurrentStep(2);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
@@ -1048,11 +1028,12 @@ export const Checkout: React.FC = () => {
                     type="button"
                     size="lg"
                     loading={loading}
-                    onClick={handleRazorpayCheckout}
+                    disabled={pollingActive}
+                    onClick={handleTrustGatewayCheckout}
                     className="flex items-center gap-2 px-8 shadow-md"
                   >
                     <Lock className="h-4 w-4" />
-                    <span>Pay ₹{total.toLocaleString('en-IN')} via Razorpay</span>
+                    <span>{pollingActive ? 'Awaiting Payment...' : `Pay ₹${total.toLocaleString('en-IN')} via UPI`}</span>
                   </Button>
                 </div>
               </div>
@@ -1171,11 +1152,12 @@ export const Checkout: React.FC = () => {
                   fullWidth
                   size="lg"
                   loading={loading}
-                  onClick={handleRazorpayCheckout}
+                  disabled={pollingActive}
+                  onClick={handleTrustGatewayCheckout}
                   className="py-3.5 shadow-md text-sm font-bold flex items-center justify-center gap-2"
                 >
                   <Lock className="h-4 w-4" />
-                  <span>Pay ₹{total.toLocaleString('en-IN')} via Razorpay</span>
+                  <span>{pollingActive ? 'Awaiting Payment...' : `Pay ₹${total.toLocaleString('en-IN')} via UPI`}</span>
                 </Button>
               )}
 

@@ -1,6 +1,99 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+function trustGatewayDevApiPlugin(): Plugin {
+  return {
+    name: 'trustgateway-dev-api',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        // ── POST /api/trustgateway-create-order ──
+        if (req.url?.startsWith('/api/trustgateway-create-order') && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const data = JSON.parse(body || '{}');
+              const apiKey = process.env.TRUST_GATEWAY_API_KEY;
+
+              if (!apiKey) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'TRUST_GATEWAY_API_KEY not set in .env' }));
+                return;
+              }
+
+              const tgRes = await fetch('https://trustgateway.in/api/v1/orders/create', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-API-Key': apiKey,
+                },
+                body: JSON.stringify({
+                  amount: String(data.amount),
+                  note: data.note || 'Tryvoal Anime Store Order',
+                  ...(data.callback_url ? { callback_url: data.callback_url } : {}),
+                }),
+              });
+
+              const tgData = await tgRes.json();
+              res.statusCode = tgRes.status;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(tgData));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: err.message || 'TrustGateway proxy error' }));
+            }
+          });
+          return;
+        }
+
+        // ── GET /api/trustgateway-verify?order_id=... ──
+        if (req.url?.startsWith('/api/trustgateway-verify') && req.method === 'GET') {
+          (async () => {
+            try {
+              const apiKey = process.env.TRUST_GATEWAY_API_KEY;
+              if (!apiKey) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'TRUST_GATEWAY_API_KEY not set in .env' }));
+                return;
+              }
+
+              const url = new URL(req.url!, `http://${req.headers.host}`);
+              const orderId = url.searchParams.get('order_id');
+
+              if (!orderId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Missing order_id parameter' }));
+                return;
+              }
+
+              const tgRes = await fetch(
+                `https://trustgateway.in/api/v1/orders/status/${encodeURIComponent(orderId)}`,
+                { headers: { 'X-API-Key': apiKey } }
+              );
+
+              const tgData = await tgRes.json();
+              res.statusCode = tgRes.status;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(tgData));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: err.message || 'TrustGateway verify proxy error' }));
+            }
+          })();
+          return;
+        }
+
+        next();
+      });
+    },
+  };
+}
+
 function razorpayDevApiPlugin(): Plugin {
   return {
     name: 'razorpay-dev-api',
@@ -273,7 +366,7 @@ function qikinkDevApiPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), razorpayDevApiPlugin(), qikinkDevApiPlugin()],
+  plugins: [react(), trustGatewayDevApiPlugin(), razorpayDevApiPlugin(), qikinkDevApiPlugin()],
   server: {
     proxy: {
       '/api/fampay-qr': {
