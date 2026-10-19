@@ -1,150 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
   CheckCircle2,
   ChevronRight,
   TrendingUp,
+  Sparkles,
+  ShoppingBag,
 } from 'lucide-react';
-import { useCartStore } from '../store/useCartStore';
-import type { Product } from '../types/database';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useWishlistStore } from '../store/useWishlistStore';
+import { ProductCard } from '../components/product/ProductCard';
 
-// Popular / Trending items defined in reference
-const POPULAR_ITEMS = [
-  {
-    id: 'popular-toji-worm',
-    name: "Fushiguro Toji's Worm",
-    slug: 'fushiguro-toji-worm',
-    price: 3499,
-    priceDisplay: '$39.99',
-    badge: 'HOT',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuD-7WziCC7G0rN-kOiDROf5U_l-_-7MCbr4lFfrpoP-yKWsUNwy_mMEJRxlHDsufRp2AkZJiFy--eWRPmzxbV2c7ZVBeWg1NWC2zzwtIWLpWPSo_C8bQE0HulEv6oxGf9ZGMW_BUAp2pqsvWegAT0eJ4iLEYxVKn90DZX0TKSFGUW4I_TPsiSMiTABJIBoiBe-4TfFK4d9OfTY-Hb8sw5TBp90tM3EV5ZoRIt8r07v-Wkg4i4N5axdY',
-  },
-  {
-    id: 'popular-ds-sticker',
-    name: 'Demon Slayer 3D Sticker',
-    slug: 'demon-slayer-3d-sticker',
-    price: 799,
-    priceDisplay: 'From $9.99',
-    badge: null,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuB0SVblqPU9uWzjreMvAqqxM5cQUwvCn6wDEZfxXfYzP15HXa74PGqa0u67nFAkoqKlomZh8QC4CeUa1zxTG4_OsLG1F2v4g53n6pNnxRRaZ4jMnGtQpko38fY-WH6cOElfjL5TKifKZFQ1HInGI8RmwqxtFWmXV05S45VuCc2eT-0glPbiJ9_A34HAFt7FxUwgt1W0dxn2ShT9YINm_iFagzPmgI-QN0NJAL5LA16PCNwu4FY9Gbvo',
-  },
-  {
-    id: 'popular-spear-heaven',
-    name: 'Inverted Spear of Heaven',
-    slug: 'inverted-spear-of-heaven',
-    price: 2999,
-    priceDisplay: '$35.99',
-    badge: null,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCMR5V4VFtH0bbCf6eRZfX4j7HasiJfkvOR_sJA4tVyR-_7kLbO4NOht3_1b0OofDuETigKU1-u41-0_dmmBwkxMh031nF_hZBErgAMuPTQH6zuCELXYHXPTcvqLT_imk2EBWsQ79ltnY16X8VMBb3W1z46vz__6ahLF8TkIa9fqyoR7Nkc7zypRu7V2_f-ov_ZTkuyGEpoWOEzD_sbSg8PFixELNzeEEwUb8RNMUn6cnyj9ZBW9QWV',
-  },
-  {
-    id: 'popular-gojo-glasses',
-    name: 'Gojo BlackLens Glasses',
-    slug: 'gojo-blacklens-glasses',
-    price: 3999,
-    priceDisplay: '$49.99',
-    badge: null,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuB-BDnCHo5LECJXtLeMg0wnHMRM5TUqcb9pxu4mMVeTeb6vo_5LRzJfQaGZy6qErzVtokag3OVPVvyksqr5g7xadpY5sTWdPdB-nVcHo1I5QJa3M5XBNXqoCMvPFmOOBSDhopjNzVjnr0nZerl1rfVbpmv-z8Bf5U3s1n__1EnzT0NtFQW-sCdHA0_vLYeU3b9OWPUZ2cFGskYMu1KQxqO_I6dF1OCuyBoV27iRwfPgck81pZYrWAId',
-  },
-  {
-    id: 'popular-cat-plush',
-    name: 'Jujutsu Cat-Ear Plush',
-    slug: 'jujutsu-cat-ear-plush',
-    price: 2899,
-    priceDisplay: 'From $37.00',
-    badge: null,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAvVh81qw1eAC4X0vkefKfCJ6lU5QjYb2jqtIzo91LjPrXIfXZ6aqg4TUKatus72vyN8pCSfcWyqKcEx56ibOi-PIXY2Ue5snAx2bi63WX_D7kHgMKcsTfGC-y9sPrSm0mRjnOB0KUCAQvkQlXPhdb03CRjVsyHKRzYPemflvnCJsfxujWjZc-KD9no0F1FzJvrCVqTu96c_jRAhhXPSDPZsRsPIbD_xcort5vTomVu26FfB3NiloP9',
-  },
-];
-
-// Streetwear Hoodies
-const HOODIE_ITEMS = [
-  {
-    id: 'hoodie-aot-harajuku',
-    name: 'AoT Harajuku Hoodie',
-    slug: 'aot-harajuku-hoodie',
-    price: 3999,
-    priceDisplay: '$49.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ3MDmUSbsOaB1aj7A-Ml6Qj6QBA9gUiz5oMU4GjoNq8fVPPK_iEQyqkqFTwQbd-GlSe-Hbw_qMOtVBYKB9RVA2We_3IdxqMQ2-DvzKm9zhMCO_SB4x-6Yxu5SBUlaWmMn6QgPVrTzDmfsm8QC9Mfoz9eambr0orPL91yNzBxC_kcSJ9UkH5S58IYv8OuzlupNQzVxbE9EipLANKq6o5EIBAWF_7NSB6RPbruapFPtvwlaCYCTX8C5',
-  },
-  {
-    id: 'hoodie-nezuko-graphic',
-    name: 'Nezuko Graphic Hoodie',
-    slug: 'nezuko-graphic-hoodie',
-    price: 2899,
-    priceDisplay: '$34.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDw7V180Uty6vggpCF7pJ5iKvHVhBZmchf9jCR3ho1HqoWrZATEotcNIIX3RcULikx13hU-gEmD0BBRC4epq4hfoHCtqEDeDEWjLXyBajpF6ZhIftfnDPw0Zq8ceG2IHrinkdwFKtmKas1g9gTX3_64QoLk5me7QU0trvreM2u5eM8rOLMbvl59clOApXYUn1ThJ2-0ddcxXnjyb8DdjfIK5SkoV3sNLtBWf_-YfKnQG5AdSHNS8JCS',
-  },
-  {
-    id: 'hoodie-jujutsu-kaisen',
-    name: 'Jujutsu Kaisen Hoodie',
-    slug: 'jujutsu-kaisen-hoodie',
-    price: 4499,
-    priceDisplay: '$59.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuC0eK2xIif2afQk7OQShzVBYjr6n4Zu7WwoNqeYpX1k5VZ8UtTYiYoYx0dNAskR7RxJn8VQZx7wkq2e1-STEjBL_Abedxk5hac29wFjIOQYUuM7yt6r--JNPkDx6N7D0yX9c9xfuRtYM8eeVDUtTpch-Q_WuTJs2Ig3jLJ58pHnCBHjfo1RiXKRjHzvhIRPyuHJYMztkaiVTOzZ7bTyGeUiiiZkSaf_2imXCLzJEn6BOsGnopGSPIW2',
-  },
-  {
-    id: 'hoodie-one-piece-sun-god',
-    name: 'One Piece Sun God Hoodie',
-    slug: 'one-piece-sun-god-hoodie',
-    price: 3199,
-    priceDisplay: '$39.90',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDebxfMxFEyfrn0-r0G2uzN7KhNQhS151oeW61M6eH7zyreiCa0VETagz5GjH1FLKyQwm-_V98rB_OsBunF_L6xFwDnTQGXqcHWqOC2e6y3j2y7ENbin063KmxIV5P_2lte-WHTSnGXVCpYYypxVbljzNX9v9oiu5qbRKxFqgbjr-zhKJseHyJ08eWZ3Q0Ra_y9TC4VfLKln1osgJOQv7GKJyXRXaD57EngOu9FnqkAp9WkmBRQYGnO',
-  },
-];
-
-// Graphic T-Shirts
-const TSHIRT_ITEMS = [
-  {
-    id: 'tee-attack-on-titan',
-    name: 'Attack on Titan T-Shirt',
-    slug: 'attack-on-titan-tshirt',
-    price: 2399,
-    priceDisplay: '$29.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCNW603OUS2TNjE0ty_tSvyet8ZmoUXeu6xaQ96vudT9aivsjRbb2SOLQhLtynBgO3GNuNdR_G7HsGCrXY78u0nmYBcK5dH2kTnCS2plpv6_scLwnSNLh0rDKK-ndCm6nefBpRDdlI9NB7SZTr1hxNABrORI0GKY8aIOBiuOEgwFqwycmC0xcyLHVBV5OGmUvzT2FLvAyD7fofvynLgOcIr7MJ_J6NaxWQTwlVCH7arOR9Kihsv4wiD',
-  },
-  {
-    id: 'tee-one-piece-washed',
-    name: 'One Piece Washed Tee',
-    slug: 'one-piece-washed-tee',
-    price: 2999,
-    priceDisplay: '$39.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAiy3BMEGxtgNToJjAiO5lvNym1EtJzZX_IoF06JB_Ue7YT3WuG_NkxyzTbnQp42rKHv12SLlMP45TzuVOMWRBiHbiN3RCg_z_5M1JmM3fqPiXyunC9-59-ZFNm4OUOkndts7G9i9tNhwFgpWoadKFyPTRS1N2069XQ5pdaCjdTQZrkB27qiPGuZp-rpb3ymN018rfKOWY-JizgPKFo0MyVNSqQhaZQOIMt9hbwGTuRgZTZwniOGH7a',
-  },
-  {
-    id: 'tee-jojo-bizarre',
-    name: "JoJo's Bizarre Adventure Tee",
-    slug: 'jojo-bizarre-adventure-tee',
-    price: 2399,
-    priceDisplay: '$29.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDt8aTLVY_VKhmzCL0pth_9ofsRt8y2iX3u9fyAc4JTN0b7rHm8lv5DfwiyBYxgEFMaHtPgsgoGtQvICKyakqDtE1abUTfEnM1uAK7GQJlcR3UTDk14XREIvw6G2DWZ52LWgcssYw-Zsa6ZBfzo7eOIYMKJ_sg-fU2M5Aqwzb0PJ1H90Zpbnoh1EfT_HtYsWWHgUv02ki1ta2eQEj-0QrwZZ-jBSAcyno9ItXAcavUT8iH1Z5Y6SBUl',
-  },
-  {
-    id: 'tee-toji-streetwear',
-    name: 'Toji Streetwear Tee',
-    slug: 'toji-streetwear-tee',
-    price: 3799,
-    priceDisplay: '$49.99',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDolOPRm3GQBRcISX65qiQyvxHNwpozZNaJCgqRHf5R0cc2OlckbN9IBVcj45NqNQtg2C-EK8ZQyLJadf-nYObjK5rgmGw-83PB8YIR0uBObO_a21-fBOmr-6AfAn77hJ_Hhy3rv_0ykvYZb6AfBNwixjOSWJPPf_0hVagaSLbFLNSwf1CgSM7OneY8OACMHKG9d3v6O6ah-o0UUL5-Xp5pZCgYtIjEJiqcfzZ9_tpRdON0tku_dzym',
-  },
-];
-
-// Anime Universes Grid
+// Anime Universes Grid for fast filtering
 const ANIME_UNIVERSES = [
   {
     name: 'Attack On Titan',
@@ -198,65 +66,28 @@ const ANIME_UNIVERSES = [
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
-  const addItem = useCartStore((s) => s.addItem);
+  const products = useCatalogStore((s) => s.products);
+  const productsLoading = useCatalogStore((s) => s.productsLoading);
+  const initializeCatalog = useCatalogStore((s) => s.initializeCatalog);
+  const { toggleWishlist, isInWishlist } = useWishlistStore();
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  useEffect(() => {
+    initializeCatalog();
+  }, [initializeCatalog]);
 
-  const showToast = (name: string) => {
-    setToastMessage(`Added "${name}" to your cart!`);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 2800);
-  };
-
-  const handleQuickAdd = (item: {
-    id: string;
-    name: string;
-    slug: string;
-    price: number;
-    image: string;
-  }) => {
-    const productObj: Product = {
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      price: item.price,
-      stock: 50,
-      featured: true,
-      category_id: null,
-      main_image_url: item.image,
-      additional_images: [],
-      created_at: new Date().toISOString(),
-      description: `Authentic ${item.name} from Tryvoal Anime Store.`,
-      brand: 'TRYVOAL',
-    };
-    addItem(productObj, 1);
-    showToast(item.name);
-  };
+  // Featured and trending products from the real catalog
+  const featuredProducts = useMemo(() => {
+    const featured = products.filter((p) => p.featured || p.is_new_arrival);
+    return featured.length > 0 ? featured.slice(0, 8) : products.slice(0, 8);
+  }, [products]);
 
   return (
     <div className="pb-16 bg-white text-gray-900 select-none">
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-brand-black text-white px-5 py-3 rounded-full shadow-2xl flex items-center space-x-2.5 border border-neutral-700 text-xs font-semibold backdrop-blur-md"
-          >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* BEGIN: HeroSection */}
       <section
         className="relative bg-brand-black text-white px-4 pt-8 pb-12 sm:pt-14 sm:pb-16 overflow-hidden border-b border-neutral-800"
         data-purpose="hero-banner"
       >
-        {/* Subtle dot pattern */}
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4b5563_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
         <div className="relative z-10 text-center max-w-lg mx-auto">
@@ -312,10 +143,10 @@ export const Home: React.FC = () => {
               </p>
 
               <Link
-                to="/shop?search=watch"
+                to="/shop"
                 className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 shadow"
               >
-                <span>EXPLORE WATCH DROP</span>
+                <span>EXPLORE STORE DROPS</span>
                 <ArrowRight className="w-4 h-4 text-black" />
               </Link>
 
@@ -340,7 +171,7 @@ export const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto no-scrollbar space-x-6 text-[11px] font-bold uppercase tracking-wider text-neutral-300 whitespace-nowrap justify-between sm:justify-center sm:gap-12">
           <div className="flex items-center space-x-1.5 shrink-0">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Free Shipping Worldwide</span>
+            <span>Free Shipping Across India</span>
           </div>
           <div className="flex items-center space-x-1.5 shrink-0">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -354,203 +185,69 @@ export const Home: React.FC = () => {
       </section>
       {/* END: TrustBanner */}
 
-      {/* BEGIN: MostPopularSection */}
-      <section className="py-8 px-4 max-w-7xl mx-auto" data-purpose="popular-products">
-        <div className="flex items-end justify-between mb-4">
+      {/* BEGIN: Featured/Trending Catalog Products */}
+      <section className="py-10 px-4 max-w-7xl mx-auto" data-purpose="popular-products">
+        <div className="flex items-end justify-between mb-6">
           <div>
             <span className="text-xs font-bold text-red-600 uppercase tracking-widest flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" />
-              Trending Now
+              Official Merch
             </span>
             <h2 className="text-xl sm:text-2xl font-black uppercase text-gray-900 tracking-tight mt-0.5">
-              Most Popular
+              Featured Collection
             </h2>
           </div>
           <Link
-            to="/shop?featured=true"
+            to="/shop"
             className="text-xs font-bold text-gray-950 hover:text-red-600 uppercase tracking-wide inline-flex items-center gap-1"
           >
-            <span>View all</span>
+            <span>View All</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
-        {/* Horizontal Swipeable List on Mobile, Clean Grid on Larger Screens */}
-        <div className="flex sm:grid sm:grid-cols-3 md:grid-cols-5 space-x-4 sm:space-x-0 sm:gap-4 overflow-x-auto no-scrollbar pb-3 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
-          {POPULAR_ITEMS.map((item) => (
-            <article
-              key={item.id}
-              className="min-w-[155px] w-[155px] sm:w-auto shrink-0 snap-start bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
-            >
-              <div
-                onClick={() => navigate(`/shop?search=${encodeURIComponent(item.name)}`)}
-                className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer"
-              >
-                <img
-                  alt={item.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  src={item.image}
-                  loading="lazy"
-                />
-                {item.badge && (
-                  <span className="absolute top-2 left-2 bg-black/85 text-white text-[10px] px-1.5 py-0.5 rounded font-bold tracking-wider">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <div className="p-2.5">
-                <h3
-                  onClick={() => navigate(`/shop?search=${encodeURIComponent(item.name)}`)}
-                  className="text-xs font-bold text-gray-900 line-clamp-1 hover:text-red-600 cursor-pointer"
-                >
-                  {item.name}
-                </h3>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs font-extrabold text-gray-950">{item.priceDisplay}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickAdd(item)}
-                    className="p-1 bg-neutral-100 hover:bg-brand-black hover:text-white rounded text-[10px] font-bold transition-colors"
-                    title="Add to cart"
-                  >
-                    + Cart
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      {/* END: MostPopularSection */}
-
-      {/* BEGIN: CategoryHoodies */}
-      <section className="py-8 px-4 bg-white border-t border-gray-200" data-purpose="hoodies-collection">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-6">
-            <span className="text-xs font-bold text-red-600 uppercase tracking-widest">
-              Engineered For Warmth & Drape
-            </span>
-            <h2 className="text-xl sm:text-2xl font-black uppercase text-gray-900 tracking-tight">
-              Streetwear Hoodies
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">Heavyweight 450GSM custom anime silhouettes</p>
-          </div>
-
-          {/* 2-Column Mobile, 4-Column Desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            {HOODIE_ITEMS.map((hoodie) => (
-              <div
-                key={hoodie.id}
-                className="bg-gray-50 rounded-xl p-2.5 border border-gray-100 flex flex-col justify-between group hover:border-neutral-300 transition-all shadow-xs"
-              >
-                <div
-                  onClick={() => navigate(`/shop?search=${encodeURIComponent(hoodie.name)}`)}
-                  className="aspect-[4/5] bg-gray-200 rounded-lg overflow-hidden mb-2 relative cursor-pointer"
-                >
-                  <img
-                    alt={hoodie.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src={hoodie.image}
-                    loading="lazy"
-                  />
-                  <span className="absolute top-2 right-2 bg-black/70 backdrop-blur-xs text-white text-[9px] px-1.5 py-0.5 rounded font-mono font-bold">
-                    450 GSM
-                  </span>
-                </div>
-                <div>
-                  <h3
-                    onClick={() => navigate(`/shop?search=${encodeURIComponent(hoodie.name)}`)}
-                    className="text-xs font-bold text-gray-800 line-clamp-1 cursor-pointer hover:text-red-600"
-                  >
-                    {hoodie.name}
-                  </h3>
-                  <p className="text-xs font-black text-gray-950 mt-1">{hoodie.priceDisplay}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleQuickAdd(hoodie)}
-                  className="mt-2.5 w-full py-2 bg-brand-black hover:bg-neutral-800 text-white text-[11px] font-bold rounded-lg uppercase tracking-wider transition-colors active:scale-95 shadow-xs"
-                >
-                  Add to Cart
-                </button>
-              </div>
+        {productsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="animate-pulse bg-gray-100 rounded-2xl aspect-[4/5]" />
             ))}
           </div>
-
-          <div className="mt-5 text-center max-w-sm mx-auto">
-            <Link
-              to="/shop?category=Hoodies"
-              className="block w-full py-2.5 border border-brand-black text-brand-black hover:bg-brand-black hover:text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors text-center"
-            >
-              View All Hoodies (18)
-            </Link>
-          </div>
-        </div>
-      </section>
-      {/* END: CategoryHoodies */}
-
-      {/* BEGIN: CategoryTShirts */}
-      <section className="py-8 px-4 bg-gray-50 border-t border-gray-200" data-purpose="tshirts-collection">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-6">
-            <span className="text-xs font-bold text-red-600 uppercase tracking-widest">
-              Daily Aesthetic Fits
-            </span>
-            <h2 className="text-xl sm:text-2xl font-black uppercase text-gray-900 tracking-tight">
-              Graphic T-Shirts
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">Oversized vintage wash & distressed prints</p>
-          </div>
-
-          {/* 2-Column Mobile, 4-Column Desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            {TSHIRT_ITEMS.map((tee) => (
-              <div
-                key={tee.id}
-                className="bg-white rounded-xl p-2.5 border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-neutral-300 transition-all"
-              >
-                <div
-                  onClick={() => navigate(`/shop?search=${encodeURIComponent(tee.name)}`)}
-                  className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2 cursor-pointer"
-                >
-                  <img
-                    alt={tee.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src={tee.image}
-                    loading="lazy"
-                  />
-                </div>
-                <div>
-                  <h3
-                    onClick={() => navigate(`/shop?search=${encodeURIComponent(tee.name)}`)}
-                    className="text-xs font-bold text-gray-800 line-clamp-1 cursor-pointer hover:text-red-600"
-                  >
-                    {tee.name}
-                  </h3>
-                  <p className="text-xs font-black text-gray-950 mt-1">{tee.priceDisplay}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleQuickAdd(tee)}
-                  className="mt-2.5 w-full py-2 bg-brand-black hover:bg-neutral-800 text-white text-[11px] font-bold rounded-lg uppercase tracking-wider transition-colors active:scale-95 shadow-xs"
-                >
-                  Quick Add
-                </button>
-              </div>
+        ) : featuredProducts.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
+            {featuredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onNavigate={(slug) => navigate(`/product/${slug}`)}
+                showFeaturedBadge={Boolean(product.featured)}
+                showWishlist={true}
+                isWishlisted={isInWishlist(product.id)}
+                onToggleWishlist={toggleWishlist}
+              />
             ))}
           </div>
-
-          <div className="mt-5 text-center max-w-sm mx-auto">
+        ) : (
+          <div className="text-center py-12 px-4 rounded-2xl bg-neutral-50 border border-neutral-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 uppercase tracking-tight">
+              New Drops Coming Soon
+            </h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1 mb-5">
+              Our curated collection is being prepared. Check our shop catalog or check back shortly!
+            </p>
             <Link
-              to="/shop?category=T-Shirts"
-              className="block w-full py-2.5 bg-brand-black hover:bg-neutral-800 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors shadow text-center"
+              to="/shop"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-brand-black text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors shadow"
             >
-              View All T-Shirts
+              <ShoppingBag className="w-4 h-4" />
+              <span>Explore Shop</span>
             </Link>
           </div>
-        </div>
+        )}
       </section>
-      {/* END: CategoryTShirts */}
+      {/* END: Featured/Trending Catalog Products */}
 
       {/* BEGIN: ShopByAnimeGrid */}
       <section

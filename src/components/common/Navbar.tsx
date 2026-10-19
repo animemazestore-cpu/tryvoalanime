@@ -138,19 +138,17 @@ export const Navbar: React.FC = () => {
   return (
     <>
       {Boolean(announcement && announcement.trim()) && (
-        <aside className="bg-brand-black text-white text-xs font-semibold py-2 px-3 overflow-hidden border-b border-neutral-800" data-purpose="announcement-banner">
-          <div className="animate-marquee whitespace-nowrap flex space-x-6 text-[11px] font-mono tracking-wide items-center">
-            <span>USE CODE: <span className="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
-            <span className="text-neutral-500">•</span>
-            <span>FREE WORLDWIDE EXPRESS SHIPPING</span>
-            <span className="text-neutral-500">•</span>
-            <span>TRYVOAL : ANIME STORE NEW DROPS OUT NOW</span>
-            <span className="text-neutral-500">•</span>
-            <span>USE CODE: <span className="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
-            <span className="text-neutral-500">•</span>
-            <span>FREE WORLDWIDE EXPRESS SHIPPING</span>
-            <span className="text-neutral-500">•</span>
-            <span>{announcement}</span>
+        <aside
+          className="bg-brand-black text-white text-xs font-semibold py-2.5 px-4 border-b border-neutral-800 text-center relative z-40"
+          data-purpose="announcement-banner"
+        >
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 sm:gap-3 text-[11px] sm:text-xs tracking-wide">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-400 text-black tracking-wider uppercase">
+              OFFER
+            </span>
+            <span className="font-medium text-neutral-200">
+              {announcement}
+            </span>
           </div>
         </aside>
       )}
