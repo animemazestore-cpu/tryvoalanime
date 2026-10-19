@@ -52,9 +52,9 @@ export const PrivacyPolicy: React.FC = () => (
         We prioritize the utmost financial security for all transactions:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>All online credit card, debit card, NetBanking, and UPI transactions are securely routed through <strong>Razorpay</strong>, a PCI-DSS Level 1 certified payment gateway.</li>
-        <li>We <strong>never store, log, or have access to</strong> your raw credit card numbers, CVV codes, bank credentials, or UPI PINs on our servers.</li>
-        <li>For direct UPI payments, transaction reference IDs (UTR) and voluntarily submitted verification slips are encrypted and accessible only by authorized billing concierges.</li>
+        <li>All online UPI transactions are securely routed through <strong>Trust Gateway</strong>, a certified secure payment processor.</li>
+        <li>We <strong>never store, log, or have access to</strong> your bank credentials or UPI PINs on our servers.</li>
+        <li>For direct UPI payments, transaction reference IDs (UTR) and verification data are encrypted and accessible only for order reconciliation.</li>
       </ul>
     </Section>
 

@@ -68,7 +68,7 @@ export const FAQ: React.FC = () => {
     {
       category: "Payment & Security",
       question: "What payment methods are supported on TRYVOAL?",
-      answer: "We support 100% secure online transactions via Razorpay, accepting all major Credit Cards (Visa, Mastercard, RuPay, Amex), Debit Cards, UPI (Google Pay, PhonePe, Paytm, BHIM), NetBanking across 50+ banks, and 0-payment checkout flows when promotional vouchers or credits are applied."
+      answer: "We support 100% secure online transactions via Trust Gateway UPI, accepting all major UPI applications including Google Pay, PhonePe, Paytm, BHIM, Cred UPI, and any bank UPI app."
     },
     {
       category: "Sustainability & Craft",

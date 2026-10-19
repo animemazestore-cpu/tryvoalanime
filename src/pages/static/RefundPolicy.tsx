@@ -74,9 +74,9 @@ export const RefundPolicy: React.FC = () => (
         Once the returned shipment is received and inspected at our central fulfillment warehouse (typically within 2 business days of arrival):
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>The refund will be credited directly back to the original payment method (Credit/Debit Card, NetBanking, or UPI) via <strong>Razorpay</strong>.</li>
-        <li>Refunds typically reflect in your bank account or card statement within <strong>3 to 5 business days</strong> depending on your banking provider.</li>
-        <li>You will receive an automated email and SMS notification once the refund transaction is executed.</li>
+        <li>The refund will be credited directly back to the original UPI payment method or bank account via <strong>Trust Gateway</strong>.</li>
+        <li>Refunds typically reflect in your bank account or UPI app within <strong>3 to 5 business days</strong> depending on your banking provider.</li>
+        <li>You will receive an automated email notification once the refund transaction is executed.</li>
       </ul>
     </Section>
 

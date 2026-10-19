@@ -57,7 +57,7 @@ export const TermsConditions: React.FC = () => (
 
     <Section title="3. Payment Security & Settlement" icon={<CheckCircle2 className="h-4 w-4 text-primary" />}>
       <p>
-        Payments must be completed in full before order processing and crate dispatch. We support Razorpay encrypted payment gateway processing (Credit/Debit cards, UPI, NetBanking, EMI) and Direct UPI QR payments. Submitting fraudulent transaction IDs or fabricated payment proofs is strictly prohibited and results in immediate order termination.
+        Payments must be completed in full before order processing and dispatch. We support Trust Gateway secure UPI payments (Google Pay, PhonePe, Paytm, BHIM, and any UPI app). Submitting fraudulent transaction IDs or fabricated payment proofs is strictly prohibited and results in immediate order termination.
       </p>
     </Section>
 

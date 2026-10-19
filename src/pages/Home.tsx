@@ -85,82 +85,29 @@ export const Home: React.FC = () => {
     <div className="pb-16 bg-white text-gray-900 select-none">
       {/* BEGIN: HeroSection */}
       <section
-        className="relative bg-brand-black text-white px-4 pt-8 pb-12 sm:pt-14 sm:pb-16 overflow-hidden border-b border-neutral-800"
+        className="relative bg-brand-black text-white px-4 pt-12 pb-16 sm:pt-20 sm:pb-24 overflow-hidden border-b border-neutral-800"
         data-purpose="hero-banner"
       >
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4b5563_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-        <div className="relative z-10 text-center max-w-lg mx-auto">
-          <span className="inline-block bg-red-600/90 text-white text-[11px] font-bold tracking-widest uppercase px-3.5 py-1 rounded-full mb-3 shadow-sm border border-red-500/30">
-            Premium Japanese Streetwear
+        <div className="relative z-10 text-center max-w-2xl mx-auto">
+          <span className="inline-block bg-red-600/90 text-white text-[11px] font-bold tracking-widest uppercase px-3.5 py-1 rounded-full mb-4 shadow-sm border border-red-500/30">
+            Official Japanese Anime Apparel & Merch
           </span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight uppercase leading-tight mb-2 font-mono">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight uppercase leading-tight mb-4 font-mono">
             Tryvoal : Anime store
           </h1>
-          <p className="text-xs sm:text-sm text-neutral-300 font-normal leading-relaxed mb-6 sm:mb-8 max-w-md mx-auto">
-            Authentic apparel, cursed accessories, and oversized manga graphics designed for genuine fans.
+          <p className="text-xs sm:text-base text-neutral-300 font-normal leading-relaxed mb-8 max-w-lg mx-auto">
+            Authentic heavy-weight streetwear, premium oversized graphics, and exclusive collectibles crafted for true fans.
           </p>
-
-          {/* Hero Showcase Card */}
-          <div
-            className="relative rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl bg-neutral-900 text-left group"
-            data-purpose="hero-showcase-banner"
-          >
-            <div className="relative aspect-[16/9] overflow-hidden bg-black">
-              <img
-                alt="Ryōshin Arcane Mechanical Watch - Limited Edition Anime Poster"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                src="/anime_watch_hero.jpg"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
-              <div className="absolute top-3 left-3">
-                <span className="inline-block bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded shadow">
-                  LIMITED DROP // RYŌSHIN ARCANE
-                </span>
-              </div>
-              <div className="absolute top-3 right-3">
-                <span className="inline-block bg-black/80 backdrop-blur-md text-amber-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-neutral-700">
-                  Only 250 Pieces
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5 bg-neutral-900 border-t border-neutral-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-mono uppercase text-neutral-400 font-bold tracking-wider">
-                  RYŌSHIN ARCANE TIMEPIECE
-                </span>
-                <span className="text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  In Stock & Ready to Ship
-                </span>
-              </div>
-              <h2 className="text-base sm:text-lg font-black uppercase text-white tracking-tight leading-snug mb-1.5 font-mono">
-                The Arcane Chronicle: Unleash The Power
-              </h2>
-              <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
-                Ultra-detailed custom mechanical anime timepiece with glowing crimson kanji indices, matte black steel link bracelet, and sapphire crystal dome.
-              </p>
-
-              <Link
-                to="/shop"
-                className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 shadow"
-              >
-                <span>EXPLORE STORE DROPS</span>
-                <ArrowRight className="w-4 h-4 text-black" />
-              </Link>
-
-              <div className="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between text-[10px] text-neutral-400 font-medium">
-                <span className="flex items-center space-x-1">
-                  <span>⚡</span>
-                  <span>Ultra-Detailed Mechanical Cut</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <span>🔥</span>
-                  <span>Exclusive Online Drop</span>
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              to="/shop"
+              className="w-full sm:w-auto px-8 py-3.5 bg-white hover:bg-neutral-100 text-black font-extrabold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 shadow"
+            >
+              <span>Explore Store Collection</span>
+              <ArrowRight className="w-4 h-4 text-black" />
+            </Link>
           </div>
         </div>
       </section>
