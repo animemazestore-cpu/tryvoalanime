@@ -61,10 +61,10 @@ export const PrivacyPolicy: React.FC = () => (
     <Section title="3. Purpose & Legal Basis for Processing" icon={<Server className="h-4 w-4 text-primary" />}>
       <p>We process your data exclusively for legitimate business purposes:</p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Processing orders, organizing wooden crate fabrication, and coordinating insured doorstep transport.</li>
-        <li>Generating certified GST tax invoices and 10-year warranty certificates for your fittings.</li>
+        <li>Processing orders, quality-checked protective packaging, and coordinating express doorstep transport.</li>
+        <li>Generating GST invoices and quality authenticity guarantee certificates for your anime drops.</li>
         <li>Providing real-time SMS/email consignment tracking updates via our logistics partners.</li>
-        <li>Responding to customer support, technical plumbing inquiries, and replacement requests.</li>
+        <li>Responding to customer support, sizing consultations, and replacement requests.</li>
       </ul>
     </Section>
 
@@ -76,13 +76,13 @@ export const PrivacyPolicy: React.FC = () => (
 
     <Section title="5. Cookies & Local Session Persistence">
       <p>
-        Our platform utilizes standard HTTP cookies and browser LocalStorage to provide an intuitive shopping experience. This includes remembering your shopping cart items, selected finish options (e.g. Brushed Gold vs. Matte Black), wishlist items, and active session tokens. You may disable cookies through your browser settings, though doing so may limit cart functionality.
+        Our platform utilizes standard HTTP cookies and browser LocalStorage to provide an intuitive shopping experience. This includes remembering your shopping cart items, selected sizing and anime design options, wishlist items, and active session tokens. You may disable cookies through your browser settings, though doing so may limit cart functionality.
       </p>
     </Section>
 
     <Section title="6. Third-Party Sharing & Freight Disclosures">
       <p>
-        We strictly <strong>do not sell, rent, or monetize</strong> your personal information. We share only necessary delivery details (name, phone number, destination address) with vetted heavy-goods logistics providers (such as Delhivery, Blue Dart, and specialized freight carriers) solely to execute delivery and installation coordination.
+        We strictly <strong>do not sell, rent, or monetize</strong> your personal information. We share only necessary delivery details (name, phone number, destination address) with vetted courier partners (such as Delhivery, Blue Dart, and express carriers) solely to execute doorstep delivery.
       </p>
     </Section>
 

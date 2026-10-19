@@ -12,7 +12,7 @@ import { ProductVariantEditor } from '../components/admin/ProductVariantEditor';
 import type { OptionDraft, VariantDraft } from '../components/admin/ProductVariantEditor';
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
-import { FALLBACK_CATEGORIES } from '../lib/catalogQueries';
+import { FALLBACK_CATEGORIES, ANIME_SERIES_LIST } from '../lib/catalogQueries';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
 import type { QikinkConfig } from '../lib/qikink';
 
@@ -3779,10 +3779,10 @@ export const Admin: React.FC = () => {
             <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-200">
               <div>
                 <h3 className="text-xl font-extrabold text-gray-900">
-                  {editingProduct ? 'Edit Apparel Product' : 'Add New Apparel Product'}
+                  {editingProduct ? 'Edit Anime Merchandise' : 'Add New Anime Merchandise'}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Configure base specifications, warranty, inventory, and multi-attribute product variants.
+                  Configure anime universe, apparel/collectible category, material specifications, inventory, and variants.
                 </p>
               </div>
               <button
@@ -3807,7 +3807,7 @@ export const Admin: React.FC = () => {
                       label="Product Name"
                       type="text"
                       required
-                      placeholder="e.g. Aura Wall-Mounted Luxury Basin Mixer"
+                      placeholder="e.g. Jujutsu Kaisen Gojo Satoru Domain Expansion Oversized Hoodie"
                       value={productForm.name}
                       onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                     />
@@ -3817,17 +3817,17 @@ export const Admin: React.FC = () => {
                     <Input
                       label="Base SKU"
                       type="text"
-                      placeholder="e.g. EBC-AURA-01"
+                      placeholder="e.g. TRV-JJK-HOOD-01"
                       value={productForm.sku}
                       onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
-                      Apparel Category
+                      Merchandise Category
                     </label>
                     <select
                       value={productForm.category_id}
@@ -3844,10 +3844,42 @@ export const Admin: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                      Anime Series (Sub-Category)
+                    </label>
+                    <select
+                      value={
+                        ANIME_SERIES_LIST.some((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())
+                          ? ANIME_SERIES_LIST.find((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())?.label || ''
+                          : (productForm.brand === 'TRYVOAL' || !productForm.brand ? '' : 'CUSTOM')
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'CUSTOM') {
+                          // Keep existing custom brand text
+                        } else if (val) {
+                          setProductForm({ ...productForm, brand: val });
+                        } else {
+                          setProductForm({ ...productForm, brand: 'TRYVOAL' });
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 rounded-xl text-sm bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                    >
+                      <option value="">Select Anime Series</option>
+                      {ANIME_SERIES_LIST.map((series) => (
+                        <option key={series.id} value={series.label}>
+                          {series.label}
+                        </option>
+                      ))}
+                      <option value="CUSTOM">Custom / Other Anime</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <Input
-                      label="Brand"
+                      label="Franchise / Universe Text"
                       type="text"
-                      placeholder="TRYVOAL"
+                      placeholder="e.g. Jujutsu Kaisen (JJK)"
                       value={productForm.brand}
                       onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
                     />
@@ -3891,25 +3923,25 @@ export const Admin: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
-                    label="Material"
+                    label="Material Composition"
                     type="text"
-                    placeholder="e.g. Forged Solid Brass / Ceramic"
+                    placeholder="e.g. 450GSM Heavyweight Fleece / 100% Cotton / High-Grade PVC"
                     value={productForm.material}
                     onChange={(e) => setProductForm({ ...productForm, material: e.target.value })}
                   />
 
                   <Input
-                    label="Base Finish"
+                    label="Base Finish / Print Type"
                     type="text"
-                    placeholder="e.g. Matte Black / Brushed Gold"
+                    placeholder="e.g. Acid Wash Black / High-Density Puff Print"
                     value={productForm.finish}
                     onChange={(e) => setProductForm({ ...productForm, finish: e.target.value })}
                   />
 
                   <Input
-                    label="Warranty Info"
+                    label="Quality / Guarantee Info"
                     type="text"
-                    placeholder="e.g. 10-Year Comprehensive Warranty"
+                    placeholder="e.g. 100% Replacement Guarantee on Defective Print/Fabric"
                     value={productForm.warranty_info}
                     onChange={(e) => setProductForm({ ...productForm, warranty_info: e.target.value })}
                   />

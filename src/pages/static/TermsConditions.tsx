@@ -32,17 +32,17 @@ const Section: React.FC<{ title: string; icon?: React.ReactNode; children: React
 export const TermsConditions: React.FC = () => (
   <PolicyPage title="Terms & Conditions of Sale">
     <p>
-      Welcome to <strong>TRYVOAL</strong>. These Terms & Conditions govern your access to, use of, and purchases made through our online store, digital catalog, and architectural concierge services. By placing an order, you agree to be bound by these legal terms.
+      Welcome to <strong>TRYVOAL</strong>. These Terms & Conditions govern your access to, use of, and purchases made through our online anime merchandise store and digital catalog. By placing an order, you agree to be bound by these legal terms.
     </p>
 
-    <Section title="1. Product Specifications & Artisan Variations" icon={<CheckCircle2 className="h-4 w-4 text-primary" />}>
+    <Section title="1. Product Specifications & Craft Variations" icon={<CheckCircle2 className="h-4 w-4 text-primary" />}>
       <p>
-        TRYVOAL manufactures luxury apparel and crafted accessories using heavyweight ring-spun organic cotton, European flax linen, and artisanal dying processes:
+        TRYVOAL manufactures authentic anime apparel and curated merchandise using heavyweight ring-spun combed cotton, premium fleece, high-density screenprints, and durable collectibles:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Vitreous china ceramic washbasins and commodes carry a standard dimensional tolerance of ±2mm to ±3mm.</li>
-        <li>Physical Vapor Deposition (PVD) finishes (Matte Black, Brushed Gold, Rose Gold, Gunmetal) exhibit subtle, luxurious undertone reflections under varying ambient lighting conditions.</li>
-        <li>All product photographs and lifestyle renderings are designed to represent color, texture, and scale as faithfully as possible.</li>
+        <li>Apparel sizing (Chest, Length, Shoulder width) carries an industry-standard tolerance of ±0.5 to ±1 inch.</li>
+        <li>Acid wash textures, vintage fades, and screenprint shades may exhibit slight artisan variations making each piece distinct.</li>
+        <li>All product photographs and 3D renders are designed to represent colors, graphics, and details as faithfully as possible.</li>
       </ul>
     </Section>
 

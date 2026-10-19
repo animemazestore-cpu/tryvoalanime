@@ -187,7 +187,7 @@ export const Navbar: React.FC = () => {
             <form onSubmit={handleSearchSubmit} className="flex items-center relative w-full">
               <input
                 type="text"
-                placeholder="Search t-shirts, shirts, accessories..."
+                placeholder="Search JJK, Bleach, Naruto, hoodies, figures..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -423,7 +423,7 @@ export const Navbar: React.FC = () => {
             <form onSubmit={handleSearchSubmit} className="flex items-center relative w-full">
               <input
                 type="text"
-                placeholder="Search t-shirts, shirts, accessories..."
+                placeholder="Search JJK, Bleach, Naruto, hoodies..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);

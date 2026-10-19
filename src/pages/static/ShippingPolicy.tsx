@@ -30,31 +30,31 @@ const Section: React.FC<{ title: string; icon?: React.ReactNode; children: React
 );
 
 export const ShippingPolicy: React.FC = () => (
-  <PolicyPage title="Shipping & Heavy-Goods Logistics Policy">
+  <PolicyPage title="Shipping & Express Delivery Policy">
     <p>
-      TRYVOAL delivers luxury heavyweight apparel, premium shirts, and crafted accessories nationwide across India. Every garment consignment is carefully packaged in weatherproof, recyclable luxury matte packaging with 100% transit insurance.
+      TRYVOAL delivers official anime streetwear, oversized graphic tees, heavyweight hoodies, action figures, and collector accessories nationwide across India. Every consignment is carefully inspected and packaged in protective anime packaging with 100% transit insurance.
     </p>
 
-    <Section title="1. Protective Packaging & Wooden Crating" icon={<Package className="h-4 w-4 text-primary" />}>
+    <Section title="1. Protective Packaging & Collector Protection" icon={<Package className="h-4 w-4 text-primary" />}>
       <p>
-        Every product in our catalog receives tailored packaging engineered for zero transit impact:
+        Every product in our catalog receives tailored packaging engineered for pristine delivery:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li><strong>Ceramic Commodes & Basins:</strong> High-density expanded polystyrene (EPS) form-fitted cushions, encased in reinforced pine-wood protective crates to eliminate impact vibration.</li>
-        <li><strong>Garments & Fine Apparel:</strong> Breathable, moisture-resistant inner wraps and rigid luxury cartons to prevent creasing and atmospheric damage.</li>
-        <li><strong>Tamper-Evident Security Seals:</strong> All master crates and cartons are stamped with branded tamper-evident tape and inspection stamps.</li>
+        <li><strong>Collectibles, Statues & Timepieces:</strong> Form-fitted shock-absorbent foam cushions and rigid collector outer-boxes to eliminate transit impact and corner denting.</li>
+        <li><strong>Streetwear Hoodies & T-Shirts:</strong> Breathable, moisture-resistant inner wraps and dust-proof premium polybags to preserve print and fabric texture.</li>
+        <li><strong>Tamper-Evident Security Seals:</strong> All master boxes are secured with branded tamper-evident seals and quality check verification stamps.</li>
       </ul>
     </Section>
 
     <Section title="2. Dispatch & Delivery Timelines" icon={<Clock className="h-4 w-4 text-primary" />}>
       <p>
-        Orders are inspected by our quality team and packaged within 24 to 48 business hours after payment confirmation. Typical door-to-door transit timelines:
+        Orders are verified and dispatched within 24 to 48 business hours after payment confirmation. Typical door-to-door transit timelines:
       </p>
       <ul className="list-disc pl-5 space-y-1">
         <li><strong>Metro Cities (Delhi-NCR, Mumbai, Bengaluru, Hyderabad, Chennai, Kolkata):</strong> 3 to 5 business days.</li>
         <li><strong>Tier 2 & Tier 3 Cities:</strong> 5 to 7 business days.</li>
         <li><strong>North-East & Remote Regions:</strong> 7 to 10 business days.</li>
-        <li><strong>Custom / Bespoke PVD Finishes:</strong> 7 to 12 business days (subject to precision electroplating batch lead time).</li>
+        <li><strong>Limited Drop Pre-Orders:</strong> 7 to 12 business days (subject to manufacturer drop allocation).</li>
       </ul>
     </Section>
 

@@ -65,7 +65,7 @@ export const Contact: React.FC = () => {
           <div>
             <h2 className="text-xl font-extrabold text-gray-900">Studio Showroom & Concierge</h2>
             <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-              Experience our tactile heavyweight organic fabrics, relaxed tailoring cuts, and handcrafted leather accessories in person or connect with our stylists.
+              Experience our heavyweight anime streetwear, high-density embroidery, graphic oversized tees, and collector accessories in person or connect with our team.
             </p>
           </div>
 
@@ -182,11 +182,11 @@ export const Contact: React.FC = () => {
                     onChange={(e) => setInquiryType(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-lg text-sm bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   >
-                    <option value="GENERAL">General Product Inquiry</option>
-                    <option value="ARCHITECTURAL">Architectural & Bulk Project Order</option>
-                    <option value="TECHNICAL">Technical Plumbing & Pressure Specs</option>
+                    <option value="GENERAL">General Product & Merch Inquiry</option>
+                    <option value="BULK">Anime Club, Event & Bulk Orders</option>
+                    <option value="SIZING_SPECS">Sizing, Print Quality & Fabric Details</option>
                     <option value="ORDER_STATUS">Order Status & Tracking</option>
-                    <option value="WARRANTY">Warranty & Replacement Claim</option>
+                    <option value="WARRANTY">Replacement or Quality Guarantee</option>
                   </select>
                 </div>
               </div>

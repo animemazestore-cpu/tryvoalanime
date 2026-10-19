@@ -19,33 +19,36 @@ import { useCatalogStore } from '../store/useCatalogStore';
 import { Button } from '../components/common/Button';
 import { ProductCard } from '../components/product/ProductCard';
 import { ProductCardSkeleton } from '../components/product/ProductCardSkeleton';
+import { ANIME_SERIES_LIST } from '../lib/catalogQueries';
 
-// Curated Apparel Facets
+// Curated Anime Merch Facets
 const FINISH_FACETS = [
   'All',
   'Onyx Black',
-  'Off-White',
-  'Slate Grey',
-  'Sapphire Navy',
-  'Vintage Washed',
-  'Desert Sand',
-  'French Blue',
+  'Crimson Red',
+  'Shadow Grey',
+  'Vintage Distressed',
+  'Titan White',
+  'Anime Violet',
+  'Sage Green',
 ];
 
 const MATERIAL_FACETS = [
   'All',
-  '100% Combed Cotton',
-  'SUS304 French Blue',
-  'Pure French Linen',
-  'Canvas & Leather',
+  '450GSM Heavyweight Fleece',
+  '100% Combed Cotton (240GSM)',
+  'High-Grade PVC / Resin',
+  'Carbon Steel / Bamboo',
+  'Silk Canvas / Matte Poster',
+  'Enamel & Stainless Steel',
 ];
 
 const PRICE_BRACKETS = [
   { label: 'All Prices', min: 0, max: 60000 },
-  { label: 'Under ₹3,000', min: 0, max: 3000 },
+  { label: 'Under ₹1,000', min: 0, max: 1000 },
+  { label: '₹1,000 - ₹3,000', min: 1000, max: 3000 },
   { label: '₹3,000 - ₹8,000', min: 3000, max: 8000 },
-  { label: '₹8,000 - ₹15,000', min: 8000, max: 15000 },
-  { label: 'Above ₹15,000', min: 15000, max: 60000 },
+  { label: 'Above ₹8,000', min: 8000, max: 60000 },
 ];
 
 export const Shop: React.FC = () => {
@@ -66,6 +69,9 @@ export const Shop: React.FC = () => {
   const [search, setSearch] = useState<string>(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState<string>(
     searchParams.get('category') || 'All'
+  );
+  const [selectedAnime, setSelectedAnime] = useState<string>(
+    searchParams.get('anime') || 'all'
   );
   const [selectedFinish, setSelectedFinish] = useState<string>(
     searchParams.get('finish') || 'All'
@@ -115,6 +121,9 @@ export const Shop: React.FC = () => {
     const urlCat = searchParams.get('category') || 'All';
     setSelectedCategory(urlCat);
 
+    const urlAnime = searchParams.get('anime') || 'all';
+    setSelectedAnime(urlAnime);
+
     const urlFinish = searchParams.get('finish') || 'All';
     setSelectedFinish(urlFinish);
 
@@ -144,6 +153,7 @@ export const Shop: React.FC = () => {
         value === null ||
         value === '' ||
         value === 'All' ||
+        value === 'all' ||
         value === 'false' ||
         (key === 'max_price' && Number(value) >= 60000) ||
         (key === 'min_price' && Number(value) <= 0) ||
@@ -238,6 +248,24 @@ export const Shop: React.FC = () => {
           }
         }
 
+        // Anime Universe / Sub-category matching
+        if (selectedAnime !== 'all') {
+          const seriesObj = ANIME_SERIES_LIST.find((s) => s.id === selectedAnime);
+          if (seriesObj && seriesObj.aliases) {
+            const matchesSeries = seriesObj.aliases.some((alias) => {
+              const a = alias.toLowerCase();
+              return (
+                prod.brand?.toLowerCase().includes(a) ||
+                prod.name.toLowerCase().includes(a) ||
+                (prod.description?.toLowerCase().includes(a) ?? false) ||
+                prod.slug.toLowerCase().includes(a) ||
+                (prod.category?.name?.toLowerCase().includes(a) ?? false)
+              );
+            });
+            if (!matchesSeries) return false;
+          }
+        }
+
         // Price range
         if (prod.price < minPrice || prod.price > maxPrice) {
           return false;
@@ -305,6 +333,7 @@ export const Shop: React.FC = () => {
     products,
     search,
     selectedCategory,
+    selectedAnime,
     selectedFinish,
     selectedMaterial,
     inStockOnly,
@@ -323,6 +352,12 @@ export const Shop: React.FC = () => {
     updateUrlParam('category', catName === 'All' ? null : catName);
   };
 
+  // Handler for anime select
+  const handleAnimeSelect = (animeId: string) => {
+    setSelectedAnime(animeId);
+    updateUrlParam('anime', animeId === 'all' ? null : animeId);
+  };
+
   // Handler for search
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -333,6 +368,7 @@ export const Shop: React.FC = () => {
   const handleClearAllFilters = () => {
     setSearch('');
     setSelectedCategory('All');
+    setSelectedAnime('all');
     setSelectedFinish('All');
     setSelectedMaterial('All');
     setInStockOnly(false);
@@ -350,6 +386,7 @@ export const Shop: React.FC = () => {
     let count = 0;
     if (search.trim()) count++;
     if (selectedCategory !== 'All') count++;
+    if (selectedAnime !== 'all') count++;
     if (selectedFinish !== 'All') count++;
     if (selectedMaterial !== 'All') count++;
     if (inStockOnly) count++;
@@ -361,6 +398,7 @@ export const Shop: React.FC = () => {
   }, [
     search,
     selectedCategory,
+    selectedAnime,
     selectedFinish,
     selectedMaterial,
     inStockOnly,
@@ -424,20 +462,70 @@ export const Shop: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Title & Luxury Subtitle */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+        {/* Page Title & Anime Subtitle */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-5">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600/10 text-red-600 border border-red-600/20">
+                Official Drops
+              </span>
+              {selectedAnime !== 'all' && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-neutral-900 text-white">
+                  Universe: {ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label || selectedAnime}
+                </span>
+              )}
+            </div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase text-gray-900 tracking-tight font-mono">
               {selectedCategory === 'All'
-                ? 'TRYVOAL Apparel Collections'
-                : selectedCategory}
+                ? selectedAnime === 'all'
+                  ? 'Anime Apparel & Collectibles'
+                  : `${ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label} Drops`
+                : `${selectedCategory}`}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
-              Heavyweight combed cotton t-shirts, tailored linen shirts, and handcrafted accessories engineered for effortless luxury.
+              Authentic heavyweight 450GSM streetwear hoodies, oversized graphic tees, Japanese anime katanas, and collectible figures.
             </p>
           </div>
           <div className="text-xs sm:text-sm text-gray-500 font-medium whitespace-nowrap">
             Showing <strong className="text-gray-900">{filteredProducts.length}</strong> of{' '}
-            <strong className="text-gray-900">{products.length}</strong> collections
+            <strong className="text-gray-900">{products.length}</strong> drops
+          </div>
+        </div>
+
+        {/* Horizontal Anime Universe (Sub-category) Filter Bar */}
+        <div className="mb-4 bg-neutral-900 text-white p-3 sm:p-4 rounded-2xl shadow-sm border border-neutral-800">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-mono">
+              <span>⚡</span> Filter By Anime Universe
+            </span>
+            {selectedAnime !== 'all' && (
+              <button
+                type="button"
+                onClick={() => handleAnimeSelect('all')}
+                className="text-[11px] font-bold text-neutral-400 hover:text-white underline"
+              >
+                Show All Universes
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar scroll-smooth">
+            {ANIME_SERIES_LIST.map((series) => {
+              const isSelected = selectedAnime === series.id;
+              return (
+                <button
+                  key={series.id}
+                  type="button"
+                  onClick={() => handleAnimeSelect(series.id)}
+                  className={`flex-shrink-0 inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all border ${
+                    isSelected
+                      ? 'bg-red-600 text-white border-red-500 shadow-md ring-2 ring-red-400/40'
+                      : 'bg-neutral-800 text-neutral-200 border-neutral-700 hover:border-neutral-500 hover:bg-neutral-700'
+                  }`}
+                >
+                  <span>{series.short || series.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -523,7 +611,7 @@ export const Shop: React.FC = () => {
           <div className="relative flex-grow max-w-md">
             <input
               type="text"
-              placeholder="Search by finish, material, SKU, name..."
+              placeholder="Search by anime (JJK, Bleach, Naruto...), category, merch..."
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full bg-white border border-gray-300 rounded-xl py-2 pl-9 pr-8 text-xs sm:text-sm focus:outline-none focus:border-primary text-gray-900 shadow-sm"
@@ -587,6 +675,15 @@ export const Shop: React.FC = () => {
               <span className="inline-flex items-center gap-1 bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-gray-800 font-medium shadow-2xs">
                 Search: &ldquo;{search}&rdquo;
                 <button onClick={() => handleSearchChange('')} className="hover:text-danger">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedAnime !== 'all' && (
+              <span className="inline-flex items-center gap-1 bg-neutral-900 text-white border border-neutral-700 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs">
+                Anime: {ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label || selectedAnime}
+                <button onClick={() => handleAnimeSelect('all')} className="hover:text-red-400">
                   <X className="h-3 w-3" />
                 </button>
               </span>
@@ -734,6 +831,42 @@ export const Shop: React.FC = () => {
                   Reset All
                 </button>
               )}
+            </div>
+
+            {/* Anime Universe / Series Filter */}
+            <div className="space-y-3 pb-4 border-b border-gray-100">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Anime Universe
+                </h4>
+                {selectedAnime !== 'all' && (
+                  <button
+                    onClick={() => handleAnimeSelect('all')}
+                    className="text-[10px] text-red-600 font-bold hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                {ANIME_SERIES_LIST.map((series) => {
+                  const isSelected = selectedAnime === series.id;
+                  return (
+                    <button
+                      key={series.id}
+                      type="button"
+                      onClick={() => handleAnimeSelect(series.id)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                        isSelected
+                          ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs font-bold'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {series.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* In-Stock & Highlight Toggles */}
@@ -918,10 +1051,10 @@ export const Shop: React.FC = () => {
 
             {/* Quality & Trust Note */}
             <div className="pt-2">
-              <div className="p-3 bg-primary/5 rounded-xl border border-primary/15 flex items-start gap-2.5">
-                <ShieldCheck className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+              <div className="p-3 bg-red-500/5 rounded-xl border border-red-500/15 flex items-start gap-2.5">
+                <ShieldCheck className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-gray-600 leading-relaxed">
-                  Every product undergoes rigorous hydraulic pressure testing and anti-tarnish plating checks before dispatch.
+                  100% authentic licensed-grade anime streetwear & collectibles. High-density embroidery, premium screenprints, and collector packaging.
                 </p>
               </div>
             </div>
@@ -947,6 +1080,50 @@ export const Shop: React.FC = () => {
                     >
                       <X className="h-5 w-5" />
                     </button>
+                  </div>
+
+                  {/* Anime Universe / Series */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                        Anime Universe
+                      </h4>
+                      {selectedAnime !== 'all' && (
+                        <button
+                          onClick={() => handleAnimeSelect('all')}
+                          className="text-[10px] text-red-600 font-bold hover:underline"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAnimeSelect('all')}
+                        className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${
+                          selectedAnime === 'all'
+                            ? 'bg-neutral-900 text-white border-neutral-900 font-bold'
+                            : 'bg-white border-gray-200 text-gray-700'
+                        }`}
+                      >
+                        All Universes
+                      </button>
+                      {ANIME_SERIES_LIST.map((series) => (
+                        <button
+                          key={series.id}
+                          type="button"
+                          onClick={() => handleAnimeSelect(series.id)}
+                          className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${
+                            selectedAnime === series.id
+                              ? 'bg-neutral-900 text-white border-neutral-900 font-bold'
+                              : 'bg-white border-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {series.short || series.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Categories */}
@@ -1092,16 +1269,16 @@ export const Shop: React.FC = () => {
                 <ProductCardSkeleton count={6} />
               </div>
             ) : filteredProducts.length === 0 ? (
-              /* Luxury Empty State */
+              /* Anime Drops Empty State */
               <div className="text-center py-16 px-4 bg-gray-50/70 rounded-3xl border border-gray-200 border-dashed max-w-2xl mx-auto">
-                <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
-                  <Box className="h-8 w-8 text-primary" />
+                <div className="w-16 h-16 bg-red-600/10 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+                  <Box className="h-8 w-8 text-red-600" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2">
-                  No luxury collections match your criteria
+                  No anime drops match your criteria
                 </h3>
                 <p className="text-xs sm:text-sm text-gray-500 mb-6 max-w-md mx-auto leading-relaxed">
-                  We couldn&apos;t find any apparel matching your active filters. Try broadening your price range, selecting another shade, or clearing filters.
+                  We couldn&apos;t find any anime merchandise matching your active filters. Try picking another anime universe, expanding your price filter, or clearing filters.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Button onClick={handleClearAllFilters} className="px-6">

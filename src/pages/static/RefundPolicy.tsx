@@ -32,34 +32,34 @@ const Section: React.FC<{ title: string; icon?: React.ReactNode; children: React
 export const RefundPolicy: React.FC = () => (
   <PolicyPage title="Refund, Replacement & Return Policy">
     <p>
-      At <strong>TRYVOAL</strong>, customer satisfaction and quality assurance are central to our brand. We understand that purchasing luxury apparel and crafted garments online requires complete confidence in transit protection, fitment accuracy, and finish excellence.
+      At <strong>TRYVOAL</strong>, fan satisfaction and product excellence are central to our brand. We understand that purchasing authentic anime streetwear, graphic hoodies, and limited collectibles online requires complete confidence in transit protection, sizing accuracy, and print quality.
     </p>
 
-    <Section title="1. 100% Transit Breakage Guarantee" icon={<ShieldCheck className="h-4 w-4 text-primary" />}>
+    <Section title="1. 100% Transit Protection Guarantee" icon={<ShieldCheck className="h-4 w-4 text-primary" />}>
       <p>
-        Every single shipment is dispatched in reinforced, weatherproof matte packaging and fully covered under our <strong>Transit Damage Guarantee</strong>:
+        Every single shipment is dispatched in reinforced, weatherproof anime-grade packaging and fully covered under our <strong>Transit Protection Guarantee</strong>:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>If your product arrives broken, cracked, chipped, or scratched during shipping, we will dispatch an immediate <strong>free priority replacement</strong>.</li>
-        <li>To initiate a transit claim, record a brief unboxing video upon uncrating the parcel and notify us at <a href="mailto:muhammad1211junaid@gmail.com" className="text-primary font-bold hover:underline">muhammad1211junaid@gmail.com</a> or via your Dashboard within <strong>7 days of delivery</strong>.</li>
+        <li>If your product arrives damaged, torn, broken, or defective during shipping, we will dispatch an immediate <strong>free priority replacement</strong>.</li>
+        <li>To initiate a claim, take clear photos or a short video upon unboxing the parcel and notify us at <a href="mailto:muhammad1211junaid@gmail.com" className="text-primary font-bold hover:underline">muhammad1211junaid@gmail.com</a> or via your Dashboard within <strong>7 days of delivery</strong>.</li>
       </ul>
     </Section>
 
     <Section title="2. 7-Day Return & Replacement Eligibility" icon={<CheckCircle2 className="h-4 w-4 text-primary" />}>
       <p>You may request a return or replacement under the following qualifying conditions:</p>
       <ul className="list-disc pl-5 space-y-1">
-        <li>The product delivered does not match the ordered model, SKU, or finish option (e.g. Chrome received instead of Brushed Gold).</li>
-        <li>The fitting exhibits verified manufacturing or cartridge defects prior to installation.</li>
-        <li>You wish to exchange for an alternative size or finish from our catalog within 7 days of receiving the package.</li>
+        <li>The product delivered does not match the ordered anime design, size, or edition.</li>
+        <li>The garment or collectible exhibits verified manufacturing, fabric, stitching, or print defects.</li>
+        <li>You wish to exchange for an alternative size or anime design from our catalog within 7 days of receiving the package.</li>
       </ul>
     </Section>
 
     <Section title="3. Mandatory Conditions for Return Acceptance" icon={<AlertTriangle className="h-4 w-4 text-primary" />}>
-      <p>Due to hygiene and plumbing seal integrity requirements, returned products must satisfy the following criteria:</p>
+      <p>Due to hygiene and collector integrity standards, returned products must satisfy the following criteria:</p>
       <ul className="list-disc pl-5 space-y-1">
-        <li><strong>Uninstalled Condition:</strong> The item must be completely uninstalled, never connected to plumbing lines or water supply, and free of plumber's putty, cement, or wrench marks.</li>
-        <li><strong>Original Packaging:</strong> All items must be packed in their original protective inner cartons with foam inserts, instruction manuals, mounting hardware, and intact warranty seals.</li>
-        <li><strong>Bespoke Custom Finishes:</strong> Products manufactured under customized client finish specifications or bulk project orders are non-returnable except in cases of verified transit damage.</li>
+        <li><strong>Unworn Condition:</strong> Apparel must be unworn, unwashed, free from perfumes or pet hair, and in pristine condition with all original tags attached.</li>
+        <li><strong>Original Packaging:</strong> Action figures, statues, katanas, watches, and accessories must remain in their original collector boxes with all protective blister packs intact.</li>
+        <li><strong>Limited Drop Items:</strong> Custom-tailored or specially commissioned merchandise is non-returnable except in cases of verified transit damage or defect.</li>
       </ul>
     </Section>
 

@@ -117,35 +117,76 @@ export function findProductBySlug(products: Product[], slug: string): Product | 
 }
 
 // ============================================================================
-// Fallback Luxury Apparel Catalog (TRYVOAL - Zero-downtime render)
+// Fallback Anime Categories (TRYVOAL - Official Drops)
 // ============================================================================
 
-export const CATEGORY_TSHIRTS_ID = 'f09925b1-9b67-4065-b982-49acc3488931';
-export const CATEGORY_SHIRTS_ID = 'b7fd3cc1-3088-43e1-ad2c-b6cdee8d1325';
-export const CATEGORY_ACCESSORIES_ID = 'e2905f6f-69a2-4fb0-956f-837e236236bc';
+export const CATEGORY_HOODIES_ID = 'f09925b1-9b67-4065-b982-49acc3488931';
+export const CATEGORY_TSHIRTS_ID = 'b7fd3cc1-3088-43e1-ad2c-b6cdee8d1325';
+export const CATEGORY_FIGURES_ID = 'e2905f6f-69a2-4fb0-956f-837e236236bc';
+export const CATEGORY_KATANAS_ID = 'a1905f6f-69a2-4fb0-956f-837e236236bd';
+export const CATEGORY_POSTERS_ID = 'c3905f6f-69a2-4fb0-956f-837e236236be';
+export const CATEGORY_ACCESSORIES_ID = 'd4905f6f-69a2-4fb0-956f-837e236236bf';
 
 export const FALLBACK_CATEGORIES: Category[] = [
   {
+    id: CATEGORY_HOODIES_ID,
+    name: 'Hoodies & Sweatshirts',
+    image_url: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=600',
+    size_enabled: true,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
     id: CATEGORY_TSHIRTS_ID,
-    name: 'T-Shirts',
+    name: 'Oversized T-Shirts',
     image_url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&q=80&w=600',
     size_enabled: true,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
-    id: CATEGORY_SHIRTS_ID,
-    name: 'Shirts',
-    image_url: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&q=80&w=600',
-    size_enabled: true,
+    id: CATEGORY_FIGURES_ID,
+    name: 'Action Figures & Statues',
+    image_url: 'https://images.unsplash.com/photo-1608889175123-8ec330b86f84?auto=format&fit=crop&q=80&w=600',
+    size_enabled: false,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: CATEGORY_KATANAS_ID,
+    name: 'Cosplay Swords & Katanas',
+    image_url: 'https://images.unsplash.com/photo-1594901840134-21fbe66d764e?auto=format&fit=crop&q=80&w=600',
+    size_enabled: false,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: CATEGORY_POSTERS_ID,
+    name: 'Posters & Wall Scrolls',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&q=80&w=600',
+    size_enabled: false,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
     id: CATEGORY_ACCESSORIES_ID,
-    name: 'Accessories',
+    name: 'Anime Accessories',
     image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600',
     size_enabled: false,
     created_at: '2026-01-01T00:00:00Z',
   },
+];
+
+// Curated Anime Universes / Sub-categories
+export const ANIME_SERIES_LIST = [
+  { id: 'all', label: 'All Anime', short: 'All' },
+  { id: 'jjk', label: 'Jujutsu Kaisen', short: 'JJK', aliases: ['jjk', 'jujutsu', 'gojo', 'sukuna', 'toji', 'megumi', 'itadori'] },
+  { id: 'bleach', label: 'Bleach', short: 'BLEACH', aliases: ['bleach', 'ichigo', 'aizen', 'bankai', 'gotei', 'shinigami'] },
+  { id: 'naruto', label: 'Naruto', short: 'NARUTO', aliases: ['naruto', 'sasuke', 'itachi', 'akatsuki', 'kakashi', 'shippuden'] },
+  { id: 'one-piece', label: 'One Piece', short: 'ONE PIECE', aliases: ['one piece', 'luffy', 'zoro', 'sanji', 'nika', 'straw hat'] },
+  { id: 'demon-slayer', label: 'Demon Slayer', short: 'DEMON SLAYER', aliases: ['demon slayer', 'kimetsu', 'tanjiro', 'nezuko', 'zenitsu', 'rengoku'] },
+  { id: 'aot', label: 'Attack on Titan', short: 'AOT', aliases: ['attack on titan', 'aot', 'eren', 'levi', 'survey corps', 'mikasa'] },
+  { id: 'dragon-ball', label: 'Dragon Ball', short: 'DRAGON BALL', aliases: ['dragon ball', 'goku', 'vegeta', 'gohan', 'saiyan', 'dbz'] },
+  { id: 'solo-leveling', label: 'Solo Leveling', short: 'SOLO LEVELING', aliases: ['solo leveling', 'sung jinwoo', 'shadow monarch', 'arise'] },
+  { id: 'berserk', label: 'Berserk', short: 'BERSERK', aliases: ['berserk', 'guts', 'griffith', 'brand of sacrifice'] },
+  { id: 'chainsaw-man', label: 'Chainsaw Man', short: 'CHAINSAW MAN', aliases: ['chainsaw man', 'denji', 'makima', 'power', 'pochita'] },
+  { id: 'hunter-x-hunter', label: 'Hunter X Hunter', short: 'HXH', aliases: ['hunter x hunter', 'hxh', 'killua', 'gon', 'kurapika'] },
+  { id: 'death-note', label: 'Death Note', short: 'DEATH NOTE', aliases: ['death note', 'light', 'ryuk', 'l'] },
 ];
 
 export const FALLBACK_PRODUCTS: Product[] = [];

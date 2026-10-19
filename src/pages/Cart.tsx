@@ -161,9 +161,9 @@ export const Cart: React.FC = () => {
           <ShoppingBag className="h-8 w-8" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Bag is Empty</h2>
-        <p className="text-gray-500 mb-8 text-sm">Explore our curated collection of luxury heavyweight t-shirts, tailored linen shirts, and minimalist accessories.</p>
+        <p className="text-gray-500 mb-8 text-sm">Explore our curated drops of anime hoodies, oversized streetwear tees, action figures, and cursed accessories.</p>
         <Link to="/shop">
-          <Button fullWidth>Browse TRYVOAL Collections</Button>
+          <Button fullWidth>Browse Anime Collections</Button>
         </Link>
       </div>
     );

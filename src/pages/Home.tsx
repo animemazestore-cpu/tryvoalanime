@@ -14,28 +14,22 @@ import { ProductCard } from '../components/product/ProductCard';
 // Anime Universes Grid for fast filtering
 const ANIME_UNIVERSES = [
   {
-    name: 'Attack On Titan',
-    slug: 'attack-on-titan',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuB2YH_KbzeU69GvYL12nSOEx060Y1hDz79G21wHSA8_z3amsgVThk1ihJg2pqLZMhUaLBEbSBaSOGbdwacWPj4vMANzy_dMV8sJ6yzpzdrE4KMTsuRcp_KRXxF3BD7UegAEQXBWI2aMl5IaCcaO0s-15blHYZPfht0JN81niMUU6kJJ9p0ruffiYI2C55ChqxvhT5f1oeB5ccqaBZnrGdAmQHKg4TZiURuvZJP0aaXz5uJ3UDP08uWP',
-  },
-  {
-    name: 'Demon Slayer',
-    slug: 'demon-slayer',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBabjgfmc6UZnVgbC9AjPJTwuFtz8nQUHj2n2EucLYqM8001QNkQ1_gRLwbPTon6_XivZr_UWr84veJ0C2kTXdopCxz4tGVWynGzzyBKa_JOat5fiQBGSiXbuOM6TbbADzFOZLpW3h2EfnaYIECtPBNnXVgMe4AMYI-NjohbHi2Nj63DneAlBwtVxwRQ1i594Od4JF2bl6Lm_LF1RcsXfWeBghBFdXRBX8XJcC6JSNocKTjfmhrMQAT',
-  },
-  {
     name: 'Jujutsu Kaisen',
-    slug: 'jujutsu-kaisen',
+    slug: 'jjk',
     image:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuB0ZCSciWsK6dS8B0y8-kCwJoe767WZC_bhcq9DE6LsWosBBcU-lwbaAac37AI3D0E49CTfRNRbmcfEMJNSYJLRS-W92-5eBRe-QBcukoZFCfuzdaynqJ3xU9C4pzgP_ruubdBh2RifK8kgwmWNFtUQiBfHK74KaedeG7X65e1GEyOYatIYDeGJ2uRpxh-wkZzxIdgB3V8JpNxpc7BHAelcDu7Bnm436jRO-IT0nzJpP7OW009lgANv',
   },
   {
-    name: 'Dragon Ball',
-    slug: 'dragon-ball',
+    name: 'Bleach',
+    slug: 'bleach',
     image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAgcxsYKwS40umLMVrGk44s-cXJUCrWtdaMtRIqoYQZJq04nyWP3qaMUgeMAHH0LY3XCpZWTm5RUnI5mFiAI-JVbL3Oy4XnEhQ8vw8Jjfw6NtGpvJrA9Z5J0Y4fXBGnvltKz8cN-ift5neUgZxtKPB4UxTFsyTUM9307UhA40w8hSZqQgl50Q2DVdROMsVyZMFl9WQuWBid7qDsrx47o1VwECA9Sd2hAmCYDG3QqgAi19WqEZBC0tsU',
+      'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80',
+  },
+  {
+    name: 'Naruto',
+    slug: 'naruto',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDaRYFPz-q905ExGzbkKsw5WSO621hvgM1gAWECOmAp3XQoaBrz0YBj4V2bTc0lJeUECeW3UgW2y9-HdW8gt3BO3LMYHUhn8ruF5AOizgqFyjgtO2gmM27jdVC9nPDoP0UGHS8Xw8rd3-g6w9qQ0x8y1tVq9EtP6TRmNl6DeDXMYbOn9bzcf9OttQDLHlxwC__rKxblyyfogboUYggb8_sQeyBrJPaJIB_vZqJ8F6Mfqq2pEU7YD72',
   },
   {
     name: 'One Piece',
@@ -44,10 +38,40 @@ const ANIME_UNIVERSES = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuC-7bqnxN2IOKkyE16V7O2gbUd6aVJJldGCJml7GS2ZMmDp2Muke2DVZvTNDn_ruxJ0_OUDdcJplXgMCva563zCRoA3cfOqd5bEm7JycE_QmpB2ePI0T2tQdCD2oHiJ9suNBnjU3A8V6h4VXPwt8bao0NzHfaInZsqiCiNrO6JWy6aLzrTplacPqdZH7RfS0t80gM4l3hyyVgLnSW3AOftox688DCvZgqspL38RGGq7qrdCTQ9xqK4A',
   },
   {
-    name: 'Naruto',
-    slug: 'naruto',
+    name: 'Demon Slayer',
+    slug: 'demon-slayer',
     image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDaRYFPz-q905ExGzbkKsw5WSO621hvgM1gAWECOmAp3XQoaBrz0YBj4V2bTc0lJeUECeW3UgW2y9p-HdW8gt3BO3LMYHUhn8ruF5AOizgqFyjgtO2gmM27jdVC9nPDoP0UGHS8Xw8rd3-g6w9qQ0x8y1tVq9EtP6TRmNl6DeDXMYbOn9bzcf9OttQDLHlxwC__rKxblyyfogboUYggb8_sQeyBrJPaJIB_vZqJ8F6Mfqq2pEU7YD72',
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuBabjgfmc6UZnVgbC9AjPJTwuFtz8nQUHj2n2EucLYqM8001QNkQ1_gRLwbPTon6_XivZr_UWr84veJ0C2kTXdopCxz4tGVWynGzzyBKa_JOat5fiQBGSiXbuOM6TbbADzFOZLpW3h2EfnaYIECtPBNnXVgMe4AMYI-NjohbHi2Nj63DneAlBwtVxwRQ1i594Od4JF2bl6Lm_LF1RcsXfWeBghBFdXRBX8XJcC6JSNocKTjfmhrMQAT',
+  },
+  {
+    name: 'Attack On Titan',
+    slug: 'attack-on-titan',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuB2YH_KbzeU69GvYL12nSOEx060Y1hDz79G21wHSA8_z3amsgVThk1ihJg2pqLZMhUaLBEbSBaSOGbdwacWPj4vMANzy_dMV8sJ6yzpzdrE4KMTsuRcp_KRXxF3BD7UegAEQXBWI2aMl5IaCcaO0s-15blHYZPfht0JN81niMUU6kJJ9p0ruffiYI2C55ChqxvhT5f1oeB5ccqaBZnrGdAmQHKg4TZiURuvZJP0aaXz5uJ3UDP08uWP',
+  },
+  {
+    name: 'Dragon Ball',
+    slug: 'dragon-ball',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuAgcxsYKwS40umLMVrGk44s-cXJUCrWtdaMtRIqoYQZJq04nyWP3qaMUgeMAHH0LY3XCpZWTm5RUnI5mFiAI-JVbL3Oy4XnEhQ8vw8Jjfw6NtGpvJrA9Z5J0Y4fXBGnvltKz8cN-ift5neUgZxtKPB4UxTFsyTUM9307UhA40w8hSZqQgl50Q2DVdROMsVyZMFl9WQuWBid7qDsrx47o1VwECA9Sd2hAmCYDG3QqgAi19WqEZBC0tsU',
+  },
+  {
+    name: 'Solo Leveling',
+    slug: 'solo-leveling',
+    image:
+      'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
+  },
+  {
+    name: 'Chainsaw Man',
+    slug: 'chainsaw-man',
+    image:
+      'https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80',
+  },
+  {
+    name: 'Berserk',
+    slug: 'berserk',
+    image:
+      'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80',
   },
   {
     name: 'Tokyo Revengers',
@@ -266,7 +290,7 @@ export const Home: React.FC = () => {
               <button
                 key={universe.name}
                 type="button"
-                onClick={() => navigate(`/shop?search=${encodeURIComponent(universe.name)}`)}
+                onClick={() => navigate(`/shop?anime=${universe.slug}`)}
                 className="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm text-left focus:outline-none"
               >
                 <img
