@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useCatalogStore } from '../store/useCatalogStore';
 import { ProductCard } from '../components/product/ProductCard';
+import { fetchHeroConfig, getCachedHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 
 // Anime Universes Grid for fast filtering
 const ANIME_UNIVERSES = [
@@ -93,8 +94,21 @@ export const Home: React.FC = () => {
   const productsLoading = useCatalogStore((s) => s.productsLoading);
   const initializeCatalog = useCatalogStore((s) => s.initializeCatalog);
 
+  const [heroConfig, setHeroConfig] = useState<HeroBannerConfig>(getCachedHeroConfig);
+
   useEffect(() => {
     initializeCatalog();
+    fetchHeroConfig().then(setHeroConfig);
+
+    const handleUpdate = () => {
+      setHeroConfig(getCachedHeroConfig());
+    };
+    window.addEventListener('hero_banner_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('hero_banner_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, [initializeCatalog]);
 
   // Featured and trending products from the real catalog
@@ -113,75 +127,86 @@ export const Home: React.FC = () => {
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4b5563_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
         <div className="relative z-10 text-center max-w-lg mx-auto">
-          <span className="inline-block bg-red-600/90 text-white text-[11px] font-bold tracking-widest uppercase px-3.5 py-1 rounded-full mb-3 shadow-sm border border-red-500/30">
-            Premium Japanese Streetwear
-          </span>
+          {heroConfig.hero_top_badge && (
+            <span className="inline-block bg-red-600/90 text-white text-[11px] font-bold tracking-widest uppercase px-3.5 py-1 rounded-full mb-3 shadow-sm border border-red-500/30">
+              {heroConfig.hero_top_badge}
+            </span>
+          )}
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight uppercase leading-tight mb-2 font-mono">
-            Tryvoal : Anime store
+            {heroConfig.hero_main_title}
           </h1>
-          <p className="text-xs sm:text-sm text-neutral-300 font-normal leading-relaxed mb-6 sm:mb-8 max-w-md mx-auto">
-            Authentic apparel, cursed accessories, and oversized manga graphics designed for genuine fans.
-          </p>
+          {heroConfig.hero_sub_title && (
+            <p className="text-xs sm:text-sm text-neutral-300 font-normal leading-relaxed mb-6 sm:mb-8 max-w-md mx-auto">
+              {heroConfig.hero_sub_title}
+            </p>
+          )}
 
-          {/* Hero Showcase Card - Ryōshin Arcane Watch */}
+          {/* Hero Showcase Card - Main Ad */}
           <div
             className="relative rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl bg-neutral-900 text-left group mb-6"
             data-purpose="hero-showcase-banner"
           >
             <div className="relative aspect-[16/9] overflow-hidden bg-black">
               <img
-                alt="Ryōshin Arcane Mechanical Watch - Limited Edition Anime Poster"
+                alt={heroConfig.title || 'Anime Hero Main Ad'}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                src="/anime_watch_hero.jpg"
+                src={heroConfig.image_url || '/anime_watch_hero.jpg'}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/anime_watch_hero.jpg';
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
-              <div className="absolute top-3 left-3">
-                <span className="inline-block bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded shadow">
-                  LIMITED DROP // RYŌSHIN ARCANE
-                </span>
-              </div>
-              <div className="absolute top-3 right-3">
-                <span className="inline-block bg-black/80 backdrop-blur-md text-amber-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-neutral-700">
-                  Only 250 Pieces
-                </span>
-              </div>
+              {heroConfig.badge && (
+                <div className="absolute top-3 left-3">
+                  <span className="inline-block bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded shadow">
+                    {heroConfig.badge}
+                  </span>
+                </div>
+              )}
+              {heroConfig.tagline && (
+                <div className="absolute top-3 right-3">
+                  <span className="inline-block bg-black/80 backdrop-blur-md text-amber-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-neutral-700">
+                    {heroConfig.tagline}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="p-4 sm:p-5 bg-neutral-900 border-t border-neutral-800">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-mono uppercase text-neutral-400 font-bold tracking-wider">
-                  RYŌSHIN ARCANE TIMEPIECE
+                  {heroConfig.item_label}
                 </span>
-                <span className="text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  In Stock & Ready to Ship
-                </span>
+                {heroConfig.status_text && (
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {heroConfig.status_text}
+                  </span>
+                )}
               </div>
               <h2 className="text-base sm:text-lg font-black uppercase text-white tracking-tight leading-snug mb-1.5 font-mono">
-                The Arcane Chronicle: Unleash The Power
+                {heroConfig.title}
               </h2>
-              <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
-                Ultra-detailed custom mechanical anime timepiece with glowing crimson kanji indices, matte black steel link bracelet, and sapphire crystal dome.
-              </p>
+              {heroConfig.description && (
+                <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
+                  {heroConfig.description}
+                </p>
+              )}
 
               <Link
-                to="/shop"
+                to={heroConfig.button_link || '/shop'}
                 className="w-full bg-white hover:bg-neutral-100 text-black font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 shadow"
               >
-                <span>EXPLORE STORE DROPS</span>
+                <span>{heroConfig.button_text || 'EXPLORE STORE DROPS'}</span>
                 <ArrowRight className="w-4 h-4 text-black" />
               </Link>
 
-              <div className="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between text-[10px] text-neutral-400 font-medium">
-                <span className="flex items-center space-x-1">
-                  <span>⚡</span>
-                  <span>Ultra-Detailed Mechanical Cut</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <span>🔥</span>
-                  <span>Exclusive Online Drop</span>
-                </span>
-              </div>
+              {(heroConfig.feature_1 || heroConfig.feature_2) && (
+                <div className="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between text-[10px] text-neutral-400 font-medium">
+                  {heroConfig.feature_1 && <span>{heroConfig.feature_1}</span>}
+                  {heroConfig.feature_2 && <span>{heroConfig.feature_2}</span>}
+                </div>
+              )}
             </div>
           </div>
         </div>

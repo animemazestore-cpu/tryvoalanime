@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCatalogStore } from '../store/useCatalogStore';
@@ -13,15 +13,41 @@ import type { OptionDraft, VariantDraft } from '../components/admin/ProductVaria
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
 import { FALLBACK_CATEGORIES, ANIME_SERIES_LIST } from '../lib/catalogQueries';
+import { DEFAULT_HERO_CONFIG, getCachedHeroConfig, fetchHeroConfig, saveHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
 import type { QikinkConfig } from '../lib/qikink';
+
+interface AnimeSeriesEntry {
+  id: string;
+  label: string;
+  short: string;
+  aliases?: string[];
+}
 
 export const Admin: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile, initialized } = useAuthStore();
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'verification' | 'products' | 'categories' | 'orders' | 'inventory' | 'questions' | 'reviews' | 'subscribers' | 'replacements' | 'coupons' | 'announcement'>('verification');
+  const [activeTab, setActiveTab] = useState<'verification' | 'products' | 'categories' | 'orders' | 'inventory' | 'questions' | 'reviews' | 'subscribers' | 'replacements' | 'coupons' | 'announcement' | 'hero_banner'>('verification');
+
+  // Hero Banner / Main Ad editor state
+  const [heroConfig, setHeroConfig] = useState<HeroBannerConfig>(getCachedHeroConfig);
+  const [savingHero, setSavingHero] = useState(false);
+
+  // Sub-categories / Anime Universes state
+  const [activeCategoryView, setActiveCategoryView] = useState<'main' | 'subcategories'>('main');
+  const [customAnimeList, setCustomAnimeList] = useState<Array<{ id: string; label: string; short: string; aliases: string[] }>>(() => {
+    try {
+      const stored = localStorage.getItem('tryvoal_custom_anime_series');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isAnimeModalOpen, setIsAnimeModalOpen] = useState(false);
+  const [animeForm, setAnimeForm] = useState({ label: '', id: '', short: '' });
+  const [selectedAnimeFilter, setSelectedAnimeFilter] = useState('all');
   
   // Mobile drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -351,6 +377,68 @@ export const Admin: React.FC = () => {
       console.warn('Supabase announcement clear failed:', err);
       alert('Announcement cleared locally! (Database notice: ' + (err?.message || err) + ')');
     }
+  };
+
+  // Computed all anime series (default list + custom ones created by admin)
+  const allAnimeSeries: AnimeSeriesEntry[] = useMemo(() => {
+    return [
+      ...(ANIME_SERIES_LIST as AnimeSeriesEntry[]),
+      ...customAnimeList.filter((c: any) => !ANIME_SERIES_LIST.some((a: any) => a.id === c.id))
+    ];
+  }, [customAnimeList]);
+
+  // Load hero config on mount
+  useEffect(() => {
+    fetchHeroConfig().then(setHeroConfig);
+  }, []);
+
+  const handleSaveHero = async () => {
+    setSavingHero(true);
+    try {
+      const res = await saveHeroConfig(heroConfig);
+      if (res.success) {
+        alert('Hero Main Ad updated and synced to database successfully!');
+      } else {
+        alert('Hero Main Ad saved! (Notice: ' + (res.error || 'Saved to persistent storage') + ')');
+      }
+    } catch (err: any) {
+      alert('Error saving hero config: ' + (err?.message || err));
+    } finally {
+      setSavingHero(false);
+    }
+  };
+
+  const handleResetHero = async () => {
+    if (!confirm('Are you sure you want to reset the Hero Main Ad to the default Ryōshin watch ad?')) return;
+    setHeroConfig(DEFAULT_HERO_CONFIG);
+    await saveHeroConfig(DEFAULT_HERO_CONFIG);
+    alert('Hero Main Ad reset to default successfully!');
+  };
+
+  const handleAddAnimeSeries = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!animeForm.label.trim()) return;
+    const slug = animeForm.id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || animeForm.label.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const shortCode = animeForm.short.trim().toUpperCase() || animeForm.label.trim().slice(0, 3).toUpperCase();
+    const newEntry = {
+      id: slug,
+      label: animeForm.label.trim(),
+      short: shortCode,
+      aliases: [slug, animeForm.label.trim().toLowerCase(), shortCode.toLowerCase()]
+    };
+    const updated = [...customAnimeList.filter(a => a.id !== slug), newEntry];
+    setCustomAnimeList(updated);
+    localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
+    setAnimeForm({ label: '', id: '', short: '' });
+    setIsAnimeModalOpen(false);
+    alert(`Anime sub-category "${newEntry.label}" added successfully!`);
+  };
+
+  const handleDeleteAnimeSeries = (id: string) => {
+    if (!confirm('Delete this custom anime sub-category?')) return;
+    const updated = customAnimeList.filter(a => a.id !== id);
+    setCustomAnimeList(updated);
+    localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
   };
 
   // Fetch / sync replacement requests from database
@@ -1021,6 +1109,7 @@ export const Admin: React.FC = () => {
   };
 
   // --- CRUD: Categories ---
+  // --- CRUD: Categories ---
   const handleCategorySubmit = async (e: React.FormEvent) => {
     if (submittingCategory) return;
     e.preventDefault();
@@ -1038,25 +1127,100 @@ export const Admin: React.FC = () => {
 
       try {
         if (editingCategory) {
-          const { data, error } = await supabase
-            .from('categories')
-            .update(payload)
-            .eq('id', editingCategory.id)
-            .select();
-          if (error) throw error;
-          if (data && data.length > 0) {
-            dbSynced = true;
+          // 1. Try update by id first (if valid UUID)
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingCategory.id);
+          let updated = false;
+
+          if (isUuid) {
+            const { data: idUpdate, error: idErr } = await supabase
+              .from('categories')
+              .update(payload)
+              .eq('id', editingCategory.id)
+              .select('id');
+            if (!idErr && idUpdate && idUpdate.length > 0) {
+              targetCatId = idUpdate[0].id;
+              dbSynced = true;
+              updated = true;
+            }
+          }
+
+          // 2. If not updated by id, try update by name
+          if (!updated) {
+            const { data: nameUpdate, error: nameErr } = await supabase
+              .from('categories')
+              .update(payload)
+              .ilike('name', categoryForm.name.trim())
+              .select('id');
+            if (!nameErr && nameUpdate && nameUpdate.length > 0) {
+              targetCatId = nameUpdate[0].id;
+              dbSynced = true;
+              updated = true;
+            }
+          }
+
+          // 3. If still not in DB, insert it
+          if (!updated) {
+            const insertRecord: any = {
+              name: categoryForm.name.trim(),
+              image_url: categoryForm.image_url.trim(),
+              size_enabled: categoryForm.size_enabled,
+            };
+            if (isUuid) {
+              insertRecord.id = editingCategory.id;
+            }
+            const { data: insData, error: insErr } = await supabase
+              .from('categories')
+              .insert([insertRecord])
+              .select('id');
+            
+            if (!insErr && insData && insData.length > 0) {
+              targetCatId = insData[0].id;
+              dbSynced = true;
+            } else if (insErr) {
+              // Try without id if id was rejected
+              const { data: retryData, error: retryErr } = await supabase
+                .from('categories')
+                .insert([{
+                  name: categoryForm.name.trim(),
+                  image_url: categoryForm.image_url.trim(),
+                  size_enabled: categoryForm.size_enabled,
+                }])
+                .select('id');
+              if (!retryErr && retryData && retryData.length > 0) {
+                targetCatId = retryData[0].id;
+                dbSynced = true;
+              } else if (retryErr) {
+                throw retryErr;
+              }
+            }
           }
         } else {
-          const { data: newCat, error } = await supabase
+          // Creating new category: check if one already exists by name first
+          const { data: existing } = await supabase
             .from('categories')
-            .insert(payload)
             .select('id')
-            .single();
-          if (error) throw error;
-          if (newCat?.id) {
-            targetCatId = newCat.id;
+            .ilike('name', categoryForm.name.trim())
+            .maybeSingle();
+
+          if (existing?.id) {
+            const { error: updErr } = await supabase
+              .from('categories')
+              .update(payload)
+              .eq('id', existing.id);
+            if (updErr) throw updErr;
+            targetCatId = existing.id;
             dbSynced = true;
+          } else {
+            const { data: newCat, error: insErr } = await supabase
+              .from('categories')
+              .insert([payload])
+              .select('id')
+              .single();
+            if (insErr) throw insErr;
+            if (newCat?.id) {
+              targetCatId = newCat.id;
+              dbSynced = true;
+            }
           }
         }
       } catch (dbErr: any) {
@@ -1092,6 +1256,8 @@ export const Admin: React.FC = () => {
           custom.push(newCategoryObj);
         }
         localStorage.setItem('elitebath_custom_categories', JSON.stringify(custom));
+        localStorage.setItem('tryvoal_custom_categories', JSON.stringify(custom));
+        window.dispatchEvent(new Event('category_updated'));
       }
 
       // 2. Immediately update Admin component state
@@ -1114,16 +1280,14 @@ export const Admin: React.FC = () => {
         useCatalogStore.getState().addCategory(newCategoryObj);
       }
 
-      if (dbCatError) {
+      if (dbSynced) {
+        alert(editingCategory ? 'Category updated and synced to database successfully!' : 'Category created and synced to database successfully!');
+      } else if (dbCatError) {
         alert(
           `⚠️ Category saved LOCALLY on this browser!\n\nNotice: ${dbCatError}\n\nNote: Changes render immediately on this device.`
         );
-      } else if (!dbSynced && editingCategory) {
-        alert(
-          'Category updated and saved locally! (Note: Supabase RLS did not return affected rows; changes are active on this browser).'
-        );
       } else {
-        alert(editingCategory ? 'Category updated successfully!' : 'Category created successfully!');
+        alert('Category updated and saved successfully!');
       }
 
       setIsCategoryModalOpen(false);
@@ -1687,7 +1851,8 @@ export const Admin: React.FC = () => {
           {([
             { id: 'verification', label: 'Status' },
             { id: 'products', label: 'Products' },
-            { id: 'categories', label: 'Categories' },
+            { id: 'categories', label: 'Categories & Subcategories' },
+            { id: 'hero_banner', label: 'Hero Main Ad' },
             { id: 'orders', label: 'Orders' },
             { id: 'inventory', label: 'Inventory' },
             { id: 'questions', label: 'Q&A' },
@@ -1746,7 +1911,7 @@ export const Admin: React.FC = () => {
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {(['verification', 'products', 'categories', 'orders', 'inventory', 'questions', 'reviews', 'subscribers', 'replacements', 'coupons', 'announcement'] as const).map((tab) => (
+            {(['verification', 'products', 'categories', 'hero_banner', 'orders', 'inventory', 'questions', 'reviews', 'subscribers', 'replacements', 'coupons', 'announcement'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
@@ -1759,7 +1924,9 @@ export const Admin: React.FC = () => {
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-transparent'
                 }`}
               >
-                <span className="flex-1">{tab.replace('_', ' ')}</span>
+                <span className="flex-1">
+                  {tab === 'hero_banner' ? 'Hero Main Ad' : tab === 'categories' ? 'Categories & Anime' : tab.replace('_', ' ')}
+                </span>
                 {activeTab === tab && (
                   <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                 )}
@@ -1978,7 +2145,7 @@ export const Admin: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-                  <div className="relative flex-grow sm:w-64">
+                  <div className="relative flex-grow sm:w-60">
                     <Search className="h-4 w-4 text-gray-400 absolute left-3 top-2.5" />
                     <input
                       type="text"
@@ -1988,6 +2155,21 @@ export const Admin: React.FC = () => {
                       className="w-full pl-9 pr-3 py-2 sm:py-1.5 rounded-xl text-xs bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:border-primary"
                     />
                   </div>
+
+                  {/* Anime Universe / Sub-Category Filter */}
+                  <select
+                    value={selectedAnimeFilter}
+                    onChange={(e) => setSelectedAnimeFilter(e.target.value)}
+                    className="py-2 sm:py-1.5 px-3 rounded-xl text-xs bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:border-primary font-medium"
+                  >
+                    <option value="all">All Anime Universes</option>
+                    {allAnimeSeries.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.short ? `${s.short} - ` : ''}{s.label}
+                      </option>
+                    ))}
+                  </select>
+
                   <Button size="sm" className="w-full sm:w-auto justify-center" onClick={() => {
                     setEditingProduct(null);
                     setProductForm({
@@ -2023,6 +2205,16 @@ export const Admin: React.FC = () => {
               <div className="md:hidden space-y-3">
                 {products
                   .filter((prod) => {
+                    if (selectedAnimeFilter !== 'all') {
+                      const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
+                      const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
+                      const brand = prod.brand?.toLowerCase() || '';
+                      const name = prod.name.toLowerCase();
+                      const desc = prod.description?.toLowerCase() || '';
+                      if (!aliases.some(a => brand.includes(a) || name.includes(a) || desc.includes(a))) {
+                        return false;
+                      }
+                    }
                     if (!productSearchQuery.trim()) return true;
                     const q = productSearchQuery.toLowerCase();
                     return (
@@ -2058,6 +2250,11 @@ export const Admin: React.FC = () => {
                             <span className="text-[10px] text-primary font-semibold bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
                               {prod.category?.name || 'Unassigned'}
                             </span>
+                            {prod.brand && (
+                              <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                                {prod.brand}
+                              </span>
+                            )}
                             {prod.has_variants && (
                               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-secondary bg-secondary/10 px-1.5 py-0.5 rounded">
                                 <Sliders className="h-2.5 w-2.5" />
@@ -2125,6 +2322,16 @@ export const Admin: React.FC = () => {
                   <tbody className="divide-y divide-gray-200">
                     {products
                       .filter((prod) => {
+                        if (selectedAnimeFilter !== 'all') {
+                          const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
+                          const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
+                          const brand = prod.brand?.toLowerCase() || '';
+                          const name = prod.name.toLowerCase();
+                          const desc = prod.description?.toLowerCase() || '';
+                          if (!aliases.some(a => brand.includes(a) || name.includes(a) || desc.includes(a))) {
+                            return false;
+                          }
+                        }
                         if (!productSearchQuery.trim()) return true;
                         const q = productSearchQuery.toLowerCase();
                         return (
@@ -2148,8 +2355,8 @@ export const Admin: React.FC = () => {
                                 {prod.sku}
                               </span>
                             )}
-                            <span className="text-[10px] text-gray-400">
-                              {prod.brand || 'TRYVOAL'}
+                            <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                              {prod.brand || 'Anime'}
                             </span>
                           </div>
                         </td>
@@ -2210,116 +2417,333 @@ export const Admin: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 3: Categories Manager */}
+          {/* TAB 3: Categories & Anime Sub-Categories Manager */}
           {activeTab === 'categories' && (
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center space-x-2">
-                  <List className="h-5.5 w-5.5 text-secondary" />
-                  <span>Collections / Categories</span>
-                </h2>
-                <Button size="sm" onClick={() => {
-                  setEditingCategory(null);
-                  setCategoryForm({ name: '', image_url: '', size_enabled: false });
-                  setIsCategoryModalOpen(true);
-                }}>
-                  <Plus className="mr-1.5 h-4 w-4" /> Add Category
-                </Button>
+              {/* Category Sub-Navigation View Switcher */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategoryView('main')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                      activeCategoryView === 'main'
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <List className="h-4 w-4" />
+                    <span>Main Categories ({categories.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategoryView('subcategories')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                      activeCategoryView === 'subcategories'
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Tag className="h-4 w-4" />
+                    <span>Anime Sub-Categories & Universes ({allAnimeSeries.length})</span>
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/20 text-white font-mono">
+                      JJK, Bleach...
+                    </span>
+                  </button>
+                </div>
+
+                <div>
+                  {activeCategoryView === 'main' ? (
+                    <Button size="sm" onClick={() => {
+                      setEditingCategory(null);
+                      setCategoryForm({ name: '', image_url: '', size_enabled: false });
+                      setIsCategoryModalOpen(true);
+                    }}>
+                      <Plus className="mr-1.5 h-4 w-4" /> Add Category
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => {
+                      setAnimeForm({ label: '', id: '', short: '' });
+                      setIsAnimeModalOpen(true);
+                    }}>
+                      <Plus className="mr-1.5 h-4 w-4" /> Add Anime Universe
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              {/* Mobile Categories List */}
-              <div className="sm:hidden space-y-3">
-                {categories.map((cat) => (
-                  <div key={cat.id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={cat.image_url}
-                        alt=""
-                        className="w-12 h-12 object-cover rounded-xl bg-white border border-gray-200 flex-shrink-0"
-                        onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
-                      />
-                      <div className="min-w-0">
-                        <p className="font-bold text-gray-900 text-sm truncate">{cat.name}</p>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
-                          cat.size_enabled ? 'bg-success/10 border border-success/20 text-success' : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {cat.size_enabled ? 'Sizes Enabled' : 'Sizes Disabled'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        onClick={() => handleEditCategory(cat)}
-                        className="p-2 bg-white border border-gray-300 text-primary rounded-lg shadow-sm"
-                        title="Edit Category"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        className="p-2 bg-white border border-gray-300 text-danger rounded-lg shadow-sm"
-                        title="Delete Category"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+              {/* VIEW 1: Main Categories (Collections) */}
+              {activeCategoryView === 'main' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">Store Collections & Categories</h3>
+                      <p className="text-xs text-gray-500">
+                        Products are assigned to these apparel & merchandise categories. Image updates sync directly to database.
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Desktop Categories Table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-600">
-                  <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-4">Image</th>
-                      <th className="px-6 py-4">Category Name</th>
-                      <th className="px-6 py-4">Sizes</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  {/* Mobile Categories List */}
+                  <div className="sm:hidden space-y-3">
                     {categories.map((cat) => (
-                      <tr key={cat.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-3">
+                      <div key={cat.id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <img
-                            src={cat.image_url || '/placeholder.jpg'}
+                            src={cat.image_url}
                             alt=""
-                            className="w-12 h-12 object-cover rounded-xl bg-gray-100 border border-gray-200"
+                            className="w-12 h-12 object-cover rounded-xl bg-white border border-gray-200 flex-shrink-0"
                             onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
                           />
-                        </td>
-                        <td className="px-6 py-3 font-bold text-gray-900">{cat.name}</td>
-                        <td className="px-6 py-3">
-                          {cat.size_enabled ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-success/10 border border-success/20 text-success text-xs font-bold">
-                              Enabled
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 text-sm truncate">{cat.name}</p>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
+                              cat.size_enabled ? 'bg-success/10 border border-success/20 text-success' : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {cat.size_enabled ? 'Sizes Enabled' : 'Sizes Disabled'}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-300 text-gray-500 text-xs font-bold">
-                              Disabled
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-right space-x-2">
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button
                             onClick={() => handleEditCategory(cat)}
-                            className="p-1.5 bg-gray-100 border border-gray-300 text-primary rounded-lg"
+                            className="p-2 bg-white border border-gray-300 text-primary rounded-lg shadow-sm"
+                            title="Edit Category"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteCategory(cat.id)}
-                            className="p-1.5 bg-gray-100 border border-gray-300 text-danger rounded-lg"
+                            className="p-2 bg-white border border-gray-300 text-danger rounded-lg shadow-sm"
+                            title="Delete Category"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+
+                  {/* Desktop Categories Table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-600">
+                      <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400 border-b border-gray-200">
+                        <tr>
+                          <th className="px-6 py-4">Image</th>
+                          <th className="px-6 py-4">Category Name</th>
+                          <th className="px-6 py-4">Sizes</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {categories.map((cat) => (
+                          <tr key={cat.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-3">
+                              <img
+                                src={cat.image_url || '/placeholder.jpg'}
+                                alt=""
+                                className="w-12 h-12 object-cover rounded-xl bg-gray-100 border border-gray-200"
+                                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
+                              />
+                            </td>
+                            <td className="px-6 py-3 font-bold text-gray-900">{cat.name}</td>
+                            <td className="px-6 py-3">
+                              {cat.size_enabled ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-success/10 border border-success/20 text-success text-xs font-bold">
+                                  Enabled
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-300 text-gray-500 text-xs font-bold">
+                                  Disabled
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-3 text-right space-x-2">
+                              <button
+                                onClick={() => handleEditCategory(cat)}
+                                className="p-1.5 bg-gray-100 border border-gray-300 text-primary rounded-lg"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-1.5 bg-gray-100 border border-gray-300 text-danger rounded-lg"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 2: Anime Sub-Categories / Universes (JJK, Bleach, Naruto, etc.) */}
+              {activeCategoryView === 'subcategories' && (
+                <div className="space-y-4">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 flex items-start gap-3">
+                    <Tag className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-sm text-gray-900 mb-1">
+                        Anime Franchises & Universes (Sub-Categories)
+                      </p>
+                      <p className="text-gray-600 leading-relaxed">
+                        These are the anime franchises (e.g. <strong>Jujutsu Kaisen (JJK)</strong>, <strong>Bleach</strong>, <strong>Naruto</strong>, <strong>One Piece</strong>) used across Tryvoal for quick customer filtering, anime pills on the storefront, and product tagging. You can tag any product by setting its <strong>Anime Universe / Franchise</strong> field in the product editor.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Mobile Anime Sub-categories Cards */}
+                  <div className="sm:hidden space-y-3">
+                    {allAnimeSeries.filter(s => s.id !== 'all').map((series) => {
+                      const count = products.filter((p) => {
+                        const b = (p.brand || '').toLowerCase().trim();
+                        const n = (p.name || '').toLowerCase();
+                        return (
+                          b === series.id.toLowerCase() ||
+                          b === series.short.toLowerCase() ||
+                          b === series.label.toLowerCase() ||
+                          series.aliases?.some((a) => b.includes(a.toLowerCase()) || n.includes(a.toLowerCase()))
+                        );
+                      }).length;
+                      const isCustom = customAnimeList.some((c) => c.id === series.id);
+
+                      return (
+                        <div key={series.id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-mono text-[10px] font-black tracking-wider">
+                                {series.short}
+                              </span>
+                              <p className="font-bold text-gray-900 text-sm truncate">{series.label}</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className="text-[11px] text-gray-500 font-mono">
+                                Slug: {series.id}
+                              </span>
+                              <span className="text-[11px] font-bold text-primary">
+                                • {count} Product{count === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAnimeFilter(series.id);
+                                setActiveTab('products');
+                              }}
+                              className="px-2.5 py-1.5 bg-white border border-gray-300 hover:border-primary text-primary rounded-lg text-xs font-bold shadow-sm"
+                            >
+                              Filter
+                            </button>
+                            {isCustom && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAnimeSeries(series.id)}
+                                className="p-1.5 bg-white border border-gray-300 hover:border-danger text-danger rounded-lg shadow-sm"
+                                title="Delete Custom Universe"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Anime Sub-categories Table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-600">
+                      <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400 border-b border-gray-200">
+                        <tr>
+                          <th className="px-6 py-4">Anime Universe</th>
+                          <th className="px-6 py-4">Acronym / Code</th>
+                          <th className="px-6 py-4">Slug / Filter ID</th>
+                          <th className="px-6 py-4">Tagged Products</th>
+                          <th className="px-6 py-4">Origin</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {allAnimeSeries.filter(s => s.id !== 'all').map((series) => {
+                          const count = products.filter((p) => {
+                            const b = (p.brand || '').toLowerCase().trim();
+                            const n = (p.name || '').toLowerCase();
+                            return (
+                              b === series.id.toLowerCase() ||
+                              b === series.short.toLowerCase() ||
+                              b === series.label.toLowerCase() ||
+                              series.aliases?.some((a) => b.includes(a.toLowerCase()) || n.includes(a.toLowerCase()))
+                            );
+                          }).length;
+                          const isCustom = customAnimeList.some((c) => c.id === series.id);
+
+                          return (
+                            <tr key={series.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-3 font-bold text-gray-900 flex items-center space-x-2">
+                                <span className="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
+                                <span>{series.label}</span>
+                              </td>
+                              <td className="px-6 py-3">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-red-600 text-white font-mono text-xs font-black tracking-wider">
+                                  {series.short}
+                                </span>
+                              </td>
+                              <td className="px-6 py-3 font-mono text-xs text-gray-500">
+                                {series.id}
+                              </td>
+                              <td className="px-6 py-3">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+                                  {count} item{count === 1 ? '' : 's'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-3">
+                                {isCustom ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
+                                    Custom Franchise
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-bold">
+                                    Core Series
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-3 text-right space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAnimeFilter(series.id);
+                                    setActiveTab('products');
+                                  }}
+                                  className="px-3 py-1 bg-white border border-gray-300 hover:border-primary text-primary rounded-lg text-xs font-bold shadow-sm"
+                                >
+                                  View Products
+                                </button>
+                                {isCustom && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAnimeSeries(series.id)}
+                                    className="p-1.5 bg-white border border-gray-300 hover:border-danger text-danger rounded-lg shadow-sm"
+                                    title="Delete Custom Universe"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -3769,6 +4193,311 @@ export const Admin: React.FC = () => {
             </div>
           )}
 
+          {/* TAB: Hero Main Ad & Banner Editor */}
+          {activeTab === 'hero_banner' && (
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center space-x-2">
+                    <Zap className="h-5.5 w-5.5 text-primary" />
+                    <span>Hero Section & Main Ad Editor</span>
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Manage the main homepage showcase ad (Ryōshin watch / grail item card), banner copy, features, image, and call-to-action button.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Button variant="outline" size="sm" onClick={handleResetHero} disabled={savingHero}>
+                    <RefreshCcw className="h-3.5 w-3.5 mr-1.5" /> Reset to Default Ad
+                  </Button>
+                  <Button size="sm" onClick={handleSaveHero} disabled={savingHero}>
+                    {savingHero ? (
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> Saving...
+                      </span>
+                    ) : (
+                      'Save & Publish Hero Ad'
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Form Editor (7 cols) */}
+                <div className="lg:col-span-7 space-y-6">
+                  {/* Hero Header Text */}
+                  <div className="bg-gray-50 p-4 sm:p-5 rounded-2xl border border-gray-200 space-y-4">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>1. Hero Section Headline & Header</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <Input
+                        label="Top Tag / Pill"
+                        type="text"
+                        placeholder="e.g. Premium Japanese Streetwear"
+                        value={heroConfig.hero_top_badge}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, hero_top_badge: e.target.value })}
+                      />
+                      <Input
+                        label="Main Title / Brand Name"
+                        type="text"
+                        placeholder="e.g. Tryvoal : Anime store"
+                        value={heroConfig.hero_main_title}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, hero_main_title: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                        Hero Subtitle / Description
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={heroConfig.hero_sub_title}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, hero_sub_title: e.target.value })}
+                        placeholder="Authentic apparel, cursed accessories, and oversized manga graphics..."
+                        className="w-full px-4 py-2.5 rounded-xl text-sm bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Main Ad Image & Media */}
+                  <div className="bg-gray-50 p-4 sm:p-5 rounded-2xl border border-gray-200 space-y-4">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>2. Main Ad Image / Graphic</span>
+                    </h3>
+                    <ImageUploadZone
+                      mode="single"
+                      label="Hero Main Ad Image (Upload)"
+                      required
+                      description="Upload hero ad image directly into Supabase Storage. (Aspect ratio ~16:9 recommended)."
+                      value={heroConfig.image_url}
+                      onChange={(url) => setHeroConfig({ ...heroConfig, image_url: url })}
+                      bucket="product-images"
+                      folder="hero"
+                    />
+                    <Input
+                      label="Or Direct Image URL"
+                      type="text"
+                      placeholder="e.g. /anime_watch_hero.jpg or https://..."
+                      value={heroConfig.image_url}
+                      onChange={(e) => setHeroConfig({ ...heroConfig, image_url: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Showcase Card Details */}
+                  <div className="bg-gray-50 p-4 sm:p-5 rounded-2xl border border-gray-200 space-y-4">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>3. Showcase Card Text & Product Specs</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <Input
+                        label="Card Top Badge"
+                        type="text"
+                        placeholder="e.g. LIMITED DROP // RYŌSHIN ARCANE"
+                        value={heroConfig.badge}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, badge: e.target.value })}
+                      />
+                      <Input
+                        label="Tagline / Piece Count"
+                        type="text"
+                        placeholder="e.g. Only 250 Pieces"
+                        value={heroConfig.tagline}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, tagline: e.target.value })}
+                      />
+                      <Input
+                        label="Item Sub-Label"
+                        type="text"
+                        placeholder="e.g. RYŌSHIN ARCANE TIMEPIECE"
+                        value={heroConfig.item_label}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, item_label: e.target.value })}
+                      />
+                      <Input
+                        label="Availability / Status Text"
+                        type="text"
+                        placeholder="e.g. In Stock & Ready to Ship"
+                        value={heroConfig.status_text}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, status_text: e.target.value })}
+                      />
+                    </div>
+
+                    <Input
+                      label="Showcase Headline / Card Title"
+                      type="text"
+                      placeholder="e.g. The Arcane Chronicle: Unleash The Power"
+                      value={heroConfig.title}
+                      onChange={(e) => setHeroConfig({ ...heroConfig, title: e.target.value })}
+                    />
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                        Card Detailed Description
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={heroConfig.description}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, description: e.target.value })}
+                        placeholder="Ultra-detailed custom mechanical anime timepiece..."
+                        className="w-full px-4 py-2.5 rounded-xl text-sm bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <Input
+                        label="Highlight Feature 1"
+                        type="text"
+                        placeholder="e.g. ⚡ Ultra-Detailed Mechanical Cut"
+                        value={heroConfig.feature_1}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, feature_1: e.target.value })}
+                      />
+                      <Input
+                        label="Highlight Feature 2"
+                        type="text"
+                        placeholder="e.g. 🔥 Exclusive Online Drop"
+                        value={heroConfig.feature_2}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, feature_2: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Call to Action Button */}
+                  <div className="bg-gray-50 p-4 sm:p-5 rounded-2xl border border-gray-200 space-y-4">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>4. Call-to-Action (CTA) Button</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <Input
+                        label="Button Label"
+                        type="text"
+                        placeholder="e.g. EXPLORE STORE DROPS"
+                        value={heroConfig.button_text}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, button_text: e.target.value })}
+                      />
+                      <Input
+                        label="Target Link URL"
+                        type="text"
+                        placeholder="e.g. /shop or /products/..."
+                        value={heroConfig.button_link}
+                        onChange={(e) => setHeroConfig({ ...heroConfig, button_link: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button onClick={handleSaveHero} disabled={savingHero} className="flex-1">
+                      {savingHero ? 'Saving Hero Ad...' : 'Save & Publish Hero Ad'}
+                    </Button>
+                    <Button variant="outline" onClick={handleResetHero} disabled={savingHero}>
+                      Reset to Default
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Live Preview (5 cols) */}
+                <div className="lg:col-span-5">
+                  <div className="sticky top-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Homepage Live Preview</span>
+                      </label>
+                      <span className="text-[11px] text-gray-400 font-mono">Dark Theme Display</span>
+                    </div>
+
+                    <div className="bg-brand-black text-white p-5 rounded-2xl border border-neutral-800 shadow-2xl space-y-4">
+                      {/* Top Badge */}
+                      <div className="text-center">
+                        {heroConfig.hero_top_badge && (
+                          <span className="inline-block bg-red-600/90 text-white text-[10px] font-bold tracking-widest uppercase px-3 py-0.5 rounded-full mb-2 shadow-sm border border-red-500/30">
+                            {heroConfig.hero_top_badge}
+                          </span>
+                        )}
+                        <h4 className="text-xl font-black uppercase tracking-tight font-mono">
+                          {heroConfig.hero_main_title || 'Tryvoal : Anime store'}
+                        </h4>
+                        {heroConfig.hero_sub_title && (
+                          <p className="text-[11px] text-neutral-400 mt-1 line-clamp-2">
+                            {heroConfig.hero_sub_title}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Showcase Card Preview */}
+                      <div className="rounded-xl overflow-hidden border border-neutral-800 bg-neutral-900 shadow-xl text-left">
+                        <div className="relative aspect-[16/9] overflow-hidden bg-black">
+                          <img
+                            src={heroConfig.image_url || '/anime_watch_hero.jpg'}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/anime_watch_hero.jpg';
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+                          {heroConfig.badge && (
+                            <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] font-black tracking-widest px-2 py-0.5 rounded uppercase">
+                              {heroConfig.badge}
+                            </span>
+                          )}
+                          {heroConfig.tagline && (
+                            <span className="absolute bottom-2 left-2 text-[10px] font-mono font-bold text-neutral-300 bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs">
+                              {heroConfig.tagline}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-3.5 space-y-2">
+                          <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                            <span className="font-mono text-red-500 font-bold uppercase">{heroConfig.item_label}</span>
+                            <span className="text-emerald-400 font-semibold">{heroConfig.status_text}</span>
+                          </div>
+
+                          <h5 className="text-sm font-black text-white uppercase tracking-tight">
+                            {heroConfig.title}
+                          </h5>
+
+                          <p className="text-[11px] text-neutral-400 line-clamp-2 leading-relaxed">
+                            {heroConfig.description}
+                          </p>
+
+                          {(heroConfig.feature_1 || heroConfig.feature_2) && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {heroConfig.feature_1 && (
+                                <span className="text-[10px] bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded border border-neutral-700">
+                                  {heroConfig.feature_1}
+                                </span>
+                              )}
+                              {heroConfig.feature_2 && (
+                                <span className="text-[10px] bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded border border-neutral-700">
+                                  {heroConfig.feature_2}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="pt-2">
+                            <div className="w-full bg-red-600 text-white text-center py-2 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm flex items-center justify-center gap-1.5">
+                              <span>{heroConfig.button_text || 'EXPLORE STORE DROPS'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 rounded-xl border border-amber-200 p-3.5 text-xs text-amber-900 space-y-1">
+                      <p className="font-bold flex items-center gap-1 text-amber-950">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>Instant Auto-Sync</span>
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-amber-800">
+                        Saving publishes updates immediately to Supabase database and local storage. Any customer viewing the storefront sees the new hero image, text, and link instantly!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -3849,8 +4578,8 @@ export const Admin: React.FC = () => {
                     </label>
                     <select
                       value={
-                        ANIME_SERIES_LIST.some((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())
-                          ? ANIME_SERIES_LIST.find((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())?.label || ''
+                        allAnimeSeries.some((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())
+                          ? allAnimeSeries.find((s) => s.label.toLowerCase() === productForm.brand?.toLowerCase() || s.id === productForm.brand?.toLowerCase())?.label || ''
                           : (productForm.brand === 'TRYVOAL' || !productForm.brand ? '' : 'CUSTOM')
                       }
                       onChange={(e) => {
@@ -3866,9 +4595,9 @@ export const Admin: React.FC = () => {
                       className="w-full px-4 py-2.5 rounded-xl text-sm bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
                     >
                       <option value="">Select Anime Series</option>
-                      {ANIME_SERIES_LIST.map((series) => (
+                      {allAnimeSeries.filter(s => s.id !== 'all').map((series) => (
                         <option key={series.id} value={series.label}>
-                          {series.label}
+                          {series.label} ({series.short})
                         </option>
                       ))}
                       <option value="CUSTOM">Custom / Other Anime</option>
@@ -4623,6 +5352,68 @@ export const Admin: React.FC = () => {
                 </Button>
                 <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white">
                   Save Qikink Settings
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ANIME SUB-CATEGORY / UNIVERSE MODAL */}
+      {isAnimeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-900/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-2xl">
+            <button
+              onClick={() => setIsAnimeModalOpen(false)}
+              className="absolute top-4 right-4 p-2 bg-gray-100 text-gray-500 hover:text-gray-900 rounded-full border border-gray-300 focus:outline-none"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex items-center space-x-2.5 mb-2">
+              <div className="p-2 rounded-xl bg-red-100 text-primary">
+                <Tag className="h-5 w-5" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Add Anime Franchise / Universe
+              </h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-5">
+              Create a new anime universe tag (e.g. Solo Leveling, Bleach, Chainsaw Man) for organizing products, filtering in the admin panel, and storefront pills.
+            </p>
+
+            <form onSubmit={handleAddAnimeSeries} className="space-y-4">
+              <Input
+                label="Anime Franchise Name"
+                type="text"
+                required
+                placeholder="e.g. Jujutsu Kaisen, Berserk, Bleach"
+                value={animeForm.label}
+                onChange={(e) => setAnimeForm({ ...animeForm, label: e.target.value })}
+              />
+
+              <Input
+                label="Short Code / Acronym (Optional)"
+                type="text"
+                placeholder="e.g. JJK, BLC, BRSK (default: 3 letters)"
+                value={animeForm.short}
+                onChange={(e) => setAnimeForm({ ...animeForm, short: e.target.value.toUpperCase() })}
+              />
+
+              <Input
+                label="Unique Slug / Tag ID (Optional)"
+                type="text"
+                placeholder="e.g. jjk, berserk (auto-generated if empty)"
+                value={animeForm.id}
+                onChange={(e) => setAnimeForm({ ...animeForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+              />
+
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 justify-end pt-3">
+                <Button variant="outline" type="button" onClick={() => setIsAnimeModalOpen(false)} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button type="submit" className="w-full sm:w-auto">
+                  Save Anime Universe
                 </Button>
               </div>
             </form>
