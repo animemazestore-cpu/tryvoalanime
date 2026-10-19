@@ -9,38 +9,48 @@ export default {
       colors: {
         background: "#FFFFFF",
         surface: "#F8FAFC",
-        'surface-dark': "#F1F5F9",
-        'surface-muted': "#F1F5F9",
+        'surface-dark': "#141416",
+        'surface-muted': "#F4F4F5",
         border: "#E2E8F0",
+        brand: {
+          black: '#0D0D0E',
+          dark: '#141416',
+          surface: '#1E1E22',
+          accent: '#E53E3E',
+          yellow: '#F6C344',
+          emerald: '#10B981',
+        },
         primary: {
-          DEFAULT: "#1e3a8a", // Deep sapphire navy
-          dark: "#172554",    // Midnight navy
-          light: "#eff6ff",   // Soft ice tint
-          soft: "#dbeafe",    // Powder blue
-          hover: "#1d4ed8",   // Electric royal blue
+          DEFAULT: "#0D0D0E", // Sleek brand black
+          dark: "#000000",
+          light: "#F4F4F5",
+          soft: "#E5E7EB",
+          hover: "#1E1E22",
+          accent: "#E53E3E", // Anime crimson accent
         },
         secondary: {
-          DEFAULT: "#2563eb",
-          dark: "#1d4ed8",
-          light: "#eff6ff",
+          DEFAULT: "#E53E3E", // Vibrant anime red
+          dark: "#C53030",
+          light: "#FFF5F5",
         },
-        success: "#16a34a",
-        warning: "#d97706",
-        danger: "#dc2626",
+        success: "#10b981",
+        warning: "#f59e0b",
+        danger: "#ef4444",
         text: {
-          primary: "#0f172a",
-          secondary: "#475569",
-          muted: "#94a3b8",
+          primary: "#0D0D0E",
+          secondary: "#4B5563",
+          muted: "#9CA3AF",
         }
       },
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
+        sans: ['Outfit', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       boxShadow: {
-        'card': '0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px 0 rgba(15, 23, 42, 0.04)',
-        'card-hover': '0 8px 16px -4px rgba(30, 58, 138, 0.12), 0 2px 6px -1px rgba(15, 23, 42, 0.04)',
+        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+        'card-hover': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
         'button': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        'button-hover': '0 4px 6px -1px rgba(30, 58, 138, 0.25)',
+        'button-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
       },
     },
   },

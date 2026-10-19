@@ -5,20 +5,23 @@
 :root {
   --background: #ffffff;
   --surface: #f8fafc;
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f4f4f5;
   --border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-primary: #0d0d0e;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
 
-  --primary: #1e3a8a;
-  --primary-hover: #172554;
-  --primary-soft: #eff6ff;
+  --primary: #0d0d0e;
+  --primary-hover: #1e1e22;
+  --primary-soft: #f4f4f5;
 
-  --secondary: #2563eb;
-  --success: #15803d;
-  --warning: #d97706;
-  --danger: #dc2626;
+  --secondary: #e53e3e;
+  --brand-black: #0d0d0e;
+  --brand-accent: #e53e3e;
+  --brand-yellow: #f6c344;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 @layer base {
@@ -272,3 +275,30 @@
 .animate-pulse-slow {
   animation: zoom-pulse-slow 18s ease-in-out infinite;
 }
+
+/* Custom horizontal scrollbar concealment for native clean feel */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.tap-highlight-transparent {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: 200%;
+  animation: marquee 22s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+

@@ -1,121 +1,144 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, CreditCard, Sparkles, Send } from 'lucide-react';
+import { ShieldCheck, Send, Check } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export const Footer: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    try {
+      await supabase.from('newsletter_subscribers').insert({ email: email.trim() });
+    } catch (err) {
+      console.warn('Newsletter submission fallback:', err);
+    }
+    setSubscribed(true);
+    setEmail('');
+  };
+
   return (
-    <footer className="bg-gray-50 border-t border-gray-200 pt-16 pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
-          {/* Brand Info */}
+    <footer className="bg-brand-black text-white pt-12 pb-8 px-4 border-t border-neutral-800" data-purpose="main-footer">
+      <div className="max-w-7xl mx-auto space-y-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
+          {/* Brand & Mission */}
           <div className="lg:col-span-2 space-y-4">
-            <Link to="/" className="flex items-center space-x-3 group">
-              <img
-                src="/logo.png"
-                alt="TRYVOAL"
-                className="h-12 w-12 object-contain rounded-xl border border-blue-200/60 shadow-sm"
-              />
-              <div className="flex flex-col">
-                <span className="text-xl font-extrabold tracking-tight text-gray-900 leading-none">
-                  TRYVOAL
+            <Link to="/" className="inline-flex items-center space-x-2.5 group">
+              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-mono font-black text-xl text-white group-hover:border-red-600 transition-colors">
+                T
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-2xl font-black tracking-tight uppercase font-mono leading-none group-hover:text-red-500 transition-colors">
+                  Tryvoal
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-widest text-primary leading-none mt-1">
-                  STUDIO
+                <span className="text-[10px] text-red-500 font-bold uppercase tracking-widest leading-none mt-1">
+                  Anime store
                 </span>
               </div>
             </Link>
-            <p className="text-gray-600 text-sm leading-relaxed max-w-sm">
-              Modern luxury streetwear & heavyweight apparel. Engineered from 240+ GSM combed organic cotton, French terry, and breezy linen with relaxed silhouettes.
+            <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
+              Tryvoal was created to serve and provide the coolest and most awesome looking anime street apparel and cursed collectibles for genuine otaku fans.
             </p>
-            <p className="text-xs text-gray-500">
-              📍 Under pass flyover, Buxar, Distt. Hapur, Uttar Pradesh
-            </p>
-            <div className="flex items-center gap-2 pt-1 text-xs font-semibold text-primary">
-              <Sparkles className="h-4 w-4" />
-              <span>Modern Luxury & Streetwear Apparel</span>
+            <div className="pt-2 text-xs text-neutral-500 space-y-1">
+              <p>📍 Worldwide Express Shipping & Domestic Dispatch across India</p>
+              <p>⚡ 450GSM Custom Cut Heavyweight Hoodies & Graphic Washed Tees</p>
             </div>
+          </div>
+
+          {/* Email Newsletter */}
+          <div className="lg:col-span-1 bg-neutral-900/80 p-5 rounded-2xl border border-neutral-800 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Subscribe to Secret Drops</h3>
+            <p className="text-xs text-neutral-400">Join our email list for exclusive drops, promo codes, and secret restocks.</p>
+            {subscribed ? (
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold py-2">
+                <Check className="w-4 h-4" />
+                <span>You're in! Check your inbox soon.</span>
+              </div>
+            ) : (
+              <form onSubmit={handleNewsletterSubmit} className="space-y-2">
+                <input
+                  type="email"
+                  required
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-black border border-neutral-700 text-white text-xs px-3 py-2.5 rounded-lg focus:outline-none focus:border-red-500 placeholder-neutral-500"
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-white hover:bg-neutral-200 text-black font-extrabold text-xs uppercase tracking-wider py-2.5 rounded-lg transition-colors active:scale-95 shadow"
+                >
+                  Subscribe
+                </button>
+              </form>
+            )}
           </div>
 
           {/* Quick Links */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">Categories</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link to="/shop" className="hover:text-primary transition-colors">All Collections</Link></li>
-              <li><Link to="/shop?category=T-Shirts" className="hover:text-primary transition-colors">T-Shirts</Link></li>
-              <li><Link to="/shop?category=Shirts" className="hover:text-primary transition-colors">Shirts</Link></li>
-              <li><Link to="/shop?category=Accessories" className="hover:text-primary transition-colors">Accessories</Link></li>
+          <div className="space-y-3 text-xs">
+            <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">Collections</h4>
+            <ul className="space-y-2 text-neutral-400">
+              <li><Link to="/shop" className="hover:text-white transition-colors">All Merch</Link></li>
+              <li><Link to="/shop?category=Hoodies" className="hover:text-white transition-colors">Streetwear Hoodies</Link></li>
+              <li><Link to="/shop?category=T-Shirts" className="hover:text-white transition-colors">Graphic T-Shirts</Link></li>
+              <li><a href="/#shop-by-anime" className="hover:text-white transition-colors">Shop By Anime</a></li>
+              <li><Link to="/shop?featured=true" className="hover:text-white transition-colors">Most Popular</Link></li>
             </ul>
           </div>
 
-          {/* Customer Service */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">Customer Care</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link to="/about" className="hover:text-primary transition-colors">About Us</Link></li>
-              <li><Link to="/contact" className="hover:text-primary transition-colors">Contact Support</Link></li>
-              <li><Link to="/track-order" className="hover:text-primary transition-colors">Track Order</Link></li>
-              <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ & Size Guide</Link></li>
-              <li><Link to="/shipping-policy" className="hover:text-primary transition-colors">Shipping & Delivery</Link></li>
-              <li><Link to="/refund-policy" className="hover:text-primary transition-colors">Returns & Replacements</Link></li>
+          {/* Support */}
+          <div className="space-y-3 text-xs">
+            <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">Customer Support</h4>
+            <ul className="space-y-2 text-neutral-400">
+              <li><Link to="/track-order" className="hover:text-white transition-colors">Track Your Order</Link></li>
+              <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+              <li><Link to="/faq" className="hover:text-white transition-colors">FAQ & Sizing</Link></li>
+              <li><Link to="/shipping-policy" className="hover:text-white transition-colors">Shipping Policy</Link></li>
+              <li><Link to="/refund-policy" className="hover:text-white transition-colors">Return & Refund</Link></li>
+              <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms-conditions" className="hover:text-white transition-colors">Terms of Service</Link></li>
             </ul>
-            <div className="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500 space-y-1">
-              <a href="mailto:muhammad1211junaid@gmail.com" className="hover:text-primary block truncate font-semibold text-gray-800">
-                muhammad1211junaid@gmail.com
-              </a>
-              <div className="flex flex-wrap gap-x-1.5 text-[11px] text-gray-600 font-medium">
-                <a href="tel:+917055435358" className="hover:text-primary">+91 70554 35358</a>
-                <span>•</span>
-                <a href="tel:+919084339649" className="hover:text-primary">+91 90843 39649</a>
-                <span>•</span>
-                <a href="tel:+916399525356" className="hover:text-primary">+91 63995 25356</a>
-              </div>
-            </div>
-          </div>
-
-          {/* Legal & Payments */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">Legal & Security</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link to="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/terms-conditions" className="hover:text-primary transition-colors">Terms of Service</Link></li>
-            </ul>
-            <div className="mt-6 p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
-              <div className="flex items-center space-x-1.5 text-xs font-semibold text-gray-800 mb-1">
-                <CreditCard className="h-4 w-4 text-primary" />
-                <span>Secure Payments</span>
-              </div>
-              <p className="text-[11px] text-gray-500 leading-snug">
-                Encrypted transactions via Razorpay, UPI, NetBanking, and all major cards.
-              </p>
-            </div>
           </div>
         </div>
 
-        {/* Prominent Developer Attribution Bar */}
-        <div className="border-t border-gray-200 py-6 flex justify-center items-center">
+        {/* Developer Attribution Bar */}
+        <div className="border-t border-neutral-800/80 pt-6 flex justify-center items-center">
           <a
             href="https://t.me/lennoxislive"
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-slate-900 hover:bg-primary text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 text-base sm:text-lg font-bold"
+            className="group inline-flex items-center gap-2.5 px-6 py-2.5 rounded-full bg-neutral-900 border border-neutral-700 hover:border-red-500 text-white shadow-md hover:shadow-lg transition-all duration-300 text-xs sm:text-sm font-semibold"
           >
-            <span className="text-gray-200">Made with</span>
-            <span className="text-red-500 text-xl inline-block" role="img" aria-label="love">❤️</span>
-            <span className="text-gray-200">by</span>
-            <span className="text-blue-300 group-hover:text-white underline decoration-2 underline-offset-4 decoration-primary group-hover:decoration-white font-extrabold tracking-wide">
+            <span className="text-neutral-300">Made with</span>
+            <span className="text-red-500 text-base" role="img" aria-label="love">❤️</span>
+            <span className="text-neutral-300">by</span>
+            <span className="text-white underline decoration-red-500 underline-offset-4 font-bold tracking-wide">
               lennoxislive
             </span>
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-500/20 group-hover:bg-white/20 text-blue-300 group-hover:text-white transition-colors ml-1">
-              <Send className="w-4 h-4 -rotate-45 ml-0.5" />
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600/20 text-red-400 group-hover:text-white transition-colors ml-0.5">
+              <Send className="w-3 h-3 -rotate-45" />
             </span>
           </a>
         </div>
 
-        <div className="border-t border-gray-200 pt-6 pb-2 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 gap-4">
-          <p>© 2026 TRYVOAL. All rights reserved. Modern luxury streetwear & apparel.</p>
-          <div className="flex items-center space-x-2">
-            <ShieldCheck className="h-4 w-4 text-success" />
-            <span>Secure 256-Bit SSL Encrypted Checkout</span>
+        {/* Payment Badges & Copyright */}
+        <div className="border-t border-neutral-800 pt-6 text-center space-y-3">
+          <div className="flex flex-wrap justify-center gap-2 text-[10px] text-neutral-400 uppercase font-mono">
+            <span className="px-2.5 py-1 bg-neutral-900 rounded border border-neutral-800">Apple Pay</span>
+            <span className="px-2.5 py-1 bg-neutral-900 rounded border border-neutral-800">Visa</span>
+            <span className="px-2.5 py-1 bg-neutral-900 rounded border border-neutral-800">Mastercard</span>
+            <span className="px-2.5 py-1 bg-neutral-900 rounded border border-neutral-800">PayPal</span>
+            <span className="px-2.5 py-1 bg-neutral-900 rounded border border-neutral-800">UPI / QR</span>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-2 text-[11px] text-neutral-500">
+            <p>© 2026, <span className="font-semibold text-neutral-300">Tryvoal : Anime store</span>. All rights reserved.</p>
+            <span className="hidden sm:inline">•</span>
+            <div className="flex items-center space-x-1.5 text-neutral-400">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              <span>100% Authentic Merchandise Guarantee</span>
+            </div>
           </div>
         </div>
       </div>

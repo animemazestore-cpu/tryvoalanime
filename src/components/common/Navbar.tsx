@@ -138,46 +138,50 @@ export const Navbar: React.FC = () => {
   return (
     <>
       {Boolean(announcement && announcement.trim()) && (
-        <div className="bg-primary text-white py-2 px-4 text-xs font-bold tracking-wider relative overflow-hidden shadow-sm z-50 flex items-center justify-center min-h-[36px]">
-          <div className="max-w-7xl mx-auto w-full overflow-hidden flex items-center justify-center gap-2 relative">
-            <div className="animate-pulse w-2 h-2 rounded-full bg-white flex-shrink-0 relative z-10"></div>
-            <div className="w-full overflow-hidden text-center select-none">
-              <span className="animate-marquee inline-block whitespace-nowrap md:whitespace-normal">
-                {announcement}
-              </span>
-            </div>
+        <aside className="bg-brand-black text-white text-xs font-semibold py-2 px-3 overflow-hidden border-b border-neutral-800" data-purpose="announcement-banner">
+          <div className="animate-marquee whitespace-nowrap flex space-x-6 text-[11px] font-mono tracking-wide items-center">
+            <span>USE CODE: <span className="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
+            <span className="text-neutral-500">•</span>
+            <span>FREE WORLDWIDE EXPRESS SHIPPING</span>
+            <span className="text-neutral-500">•</span>
+            <span>TRYVOAL : ANIME STORE NEW DROPS OUT NOW</span>
+            <span className="text-neutral-500">•</span>
+            <span>USE CODE: <span className="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
+            <span className="text-neutral-500">•</span>
+            <span>FREE WORLDWIDE EXPRESS SHIPPING</span>
+            <span className="text-neutral-500">•</span>
+            <span>{announcement}</span>
           </div>
-        </div>
+        </aside>
       )}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="flex items-center space-x-3 group">
-              <img
-                src="/logo.png"
-                alt="TRYVOAL"
-                className="h-11 w-11 object-contain rounded-xl border border-blue-200/60 shadow-sm group-hover:scale-105 transition-transform"
-              />
-              <div className="flex flex-col">
-                <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 leading-none group-hover:text-primary transition-colors">
-                  TRYVOAL
+            <Link to="/" className="flex items-center space-x-2.5 group">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-black text-white flex items-center justify-center font-mono font-black text-lg border border-neutral-800 group-hover:border-red-600 transition-colors shadow-sm">
+                T
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-950 uppercase font-mono leading-none group-hover:text-red-600 transition-colors">
+                  Tryvoal
                 </span>
-                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-primary leading-none mt-0.5">
-                  STUDIO
+                <span className="block text-[9px] tracking-widest text-red-600 font-bold uppercase leading-none mt-1">
+                  Anime store
                 </span>
               </div>
             </Link>
           </div>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex space-x-8">
-            <Link to="/shop" className="text-gray-600 hover:text-primary font-medium transition-colors">Shop</Link>
-                        <Link to="/track-order" className="text-gray-600 hover:text-primary font-medium transition-colors">Track Order</Link>
-            <Link to="/contact" className="text-gray-600 hover:text-primary font-medium transition-colors">Contact</Link>
-            <Link to="/faq" className="text-gray-600 hover:text-primary font-medium transition-colors">FAQ</Link>
-            <Link to="/about" className="text-gray-600 hover:text-primary font-medium transition-colors">About Us</Link>
+          <div className="hidden md:flex space-x-7 items-center text-xs font-bold uppercase tracking-wider">
+            <Link to="/shop" className="text-gray-700 hover:text-red-600 transition-colors">Shop</Link>
+            <Link to="/shop?category=Hoodies" className="text-gray-700 hover:text-red-600 transition-colors">Hoodies</Link>
+            <Link to="/shop?category=T-Shirts" className="text-gray-700 hover:text-red-600 transition-colors">T-Shirts</Link>
+            <a href="/#shop-by-anime" className="text-gray-700 hover:text-red-600 transition-colors">Anime Universes</a>
+            <Link to="/track-order" className="text-gray-700 hover:text-red-600 transition-colors">Track Order</Link>
+            <Link to="/contact" className="text-gray-700 hover:text-red-600 transition-colors">Contact</Link>
           </div>
 
           {/* Search Form with Instant Live Dropdown */}
@@ -500,36 +504,49 @@ export const Navbar: React.FC = () => {
           <Link
             to="/shop"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block text-gray-700 hover:text-primary text-base font-semibold py-2"
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
           >
-            Shop
+            All Collections
           </Link>
-
+          <Link
+            to="/shop?category=Hoodies"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
+          >
+            Streetwear Hoodies
+          </Link>
+          <Link
+            to="/shop?category=T-Shirts"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
+          >
+            Graphic T-Shirts
+          </Link>
+          <a
+            href="/#shop-by-anime"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
+          >
+            Shop By Anime
+          </a>
           <Link
             to="/track-order"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block text-gray-700 hover:text-primary text-base font-semibold py-2"
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
           >
             Track Order
           </Link>
           <Link
             to="/contact"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block text-gray-700 hover:text-primary text-base font-semibold py-2"
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
           >
-            Contact
-          </Link>
-          <Link
-            to="/faq"
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="block text-gray-700 hover:text-primary text-base font-semibold py-2"
-          >
-            FAQ
+            Contact Support
           </Link>
           <Link
             to="/about"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block text-gray-700 hover:text-primary text-base font-semibold py-2"
+            className="block text-gray-800 hover:text-red-600 text-sm font-bold uppercase tracking-wider py-2"
           >
             About Us
           </Link>

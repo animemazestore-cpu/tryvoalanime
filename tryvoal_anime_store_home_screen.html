@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Tryvoal : Anime store | Streetwear &amp; Merch</title>
+<!-- Tailwind CSS v3 CDN with forms and container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              black: '#0D0D0E',
+              dark: '#141416',
+              surface: '#1E1E22',
+              accent: '#E53E3E',
+              yellow: '#F6C344'
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: StyleConfigurations -->
+<style data-purpose="mobile-enhancements">
+    /* Custom horizontal scroll bar concealment for native app feel */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .tap-highlight-transparent {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+<style data-purpose="marquee-animation">
+    @keyframes marquee {
+      0% { transform: translateX(0%); }
+      100% { transform: translateX(-50%); }
+    }
+    .animate-marquee {
+      display: flex;
+      width: 200%;
+      animation: marquee 18s linear infinite;
+    }
+  </style>
+<!-- END: StyleConfigurations -->
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans antialiased select-none pb-12 tap-highlight-transparent">
+<!-- BEGIN: AnnouncementBar -->
+<aside class="bg-brand-black text-white text-xs font-semibold py-2 px-3 overflow-hidden border-b border-neutral-800" data-purpose="announcement-banner">
+<div class="animate-marquee whitespace-nowrap flex space-x-6">
+<span>USE CODE: <span class="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
+<span>•</span>
+<span>FREE WORLDWIDE EXPRESS SHIPPING</span>
+<span>•</span>
+<span>TRYVOAL : ANIME STORE NEW DROPS OUT NOW</span>
+<span>•</span>
+<span>USE CODE: <span class="text-amber-400 font-bold">"TRYVOAL10"</span> FOR 10% OFF</span>
+<span>•</span>
+<span>FREE WORLDWIDE EXPRESS SHIPPING</span>
+</div>
+</aside>
+<!-- END: AnnouncementBar -->
+<!-- BEGIN: Header -->
+<header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200">
+<div class="px-4 py-3 flex items-center justify-between">
+<!-- Left: Mobile Menu Toggle & Search -->
+<div class="flex items-center space-x-3">
+<button aria-label="Open Navigation Menu" class="p-1.5 rounded-lg text-gray-800 hover:bg-gray-100 transition-colors" type="button">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<button aria-label="Search Merch" class="p-1.5 rounded-lg text-gray-800 hover:bg-gray-100 transition-colors" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M21 21l-4.35-4.35m1.85-5.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+<!-- Center: Store Branding -->
+<div class="text-center">
+<a class="inline-block" href="#">
+<span class="text-xl font-extrabold tracking-tight text-gray-950 uppercase font-mono">Tryvoal</span>
+<span class="block text-[9px] tracking-widest text-red-600 font-bold -mt-1 uppercase">Anime store</span>
+</a>
+</div>
+<!-- Right: User Account & Shopping Cart -->
+<div class="flex items-center space-x-2">
+<button aria-label="Account Profile" class="p-1.5 rounded-lg text-gray-800 hover:bg-gray-100 transition-colors" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<button aria-label="Cart" class="relative p-1.5 rounded-lg text-gray-800 hover:bg-gray-100 transition-colors" type="button">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="absolute top-0.5 right-0.5 bg-brand-black text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">2</span>
+</button>
+</div>
+</div>
+</header>
+<!-- END: Header -->
+<!-- BEGIN: HeroSection -->
+<section class="relative bg-brand-black text-white px-4 pt-8 pb-10 overflow-hidden" data-purpose="hero-banner">
+<!-- Visual background treatment -->
+<div class="absolute inset-0 opacity-20 bg-[radial-gradient(#4b5563_1px,transparent_1px)] [background-size:16px_16px]"></div>
+<div class="relative z-10 text-center max-w-sm mx-auto">
+<span class="inline-block bg-red-600/90 text-white text-[11px] font-bold tracking-widest uppercase px-3 py-1 rounded-full mb-3 shadow-sm">
+        Premium Japanese Streetwear
+      </span>
+<h1 class="text-3xl font-black tracking-tight uppercase leading-tight mb-2">
+        Tryvoal : Anime store
+      </h1>
+<p class="text-sm text-gray-300 font-normal leading-relaxed mb-6">
+        Authentic apparel, cursed accessories, and oversized manga graphics designed for genuine fans.
+      </p>
+<!-- Promo Offer Pop-up Card Style (Based on reference screenshot overlay) -->
+<div class="relative rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl bg-neutral-900 text-left group" data-purpose="hero-showcase-banner"><div class="relative aspect-[16/9] overflow-hidden bg-black"><img alt="Ryōshin Arcane Mechanical Watch - Limited Edition Anime Poster" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="./public/anime_watch_hero.jpg"/><div class="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent"></div><div class="absolute top-3 left-3"><span class="inline-block bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded shadow">LIMITED DROP // RYŌSHIN ARCANE</span></div><div class="absolute top-3 right-3"><span class="inline-block bg-black/80 backdrop-blur-md text-amber-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-neutral-700">Only 250 Pieces</span></div></div><div class="p-4 bg-neutral-900 border-t border-neutral-800"><div class="flex items-center justify-between mb-2"><span class="text-[11px] font-mono uppercase text-gray-400 font-bold tracking-wider">RYŌSHIN ARCANE TIMEPIECE</span><span class="text-[10px] text-emerald-400 font-bold uppercase">In Stock &amp; Ready to Ship</span></div><h2 class="text-lg font-black uppercase text-white tracking-tight leading-tight mb-1.5 font-mono">The Arcane Chronicle: Unleash The Power</h2><p class="text-xs text-gray-400 mb-3.5 leading-relaxed">Ultra-detailed custom mechanical anime timepiece with glowing crimson kanji indices, matte black steel link bracelet, and sapphire crystal dome.</p><a class="w-full bg-white hover:bg-gray-100 text-black font-extrabold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 shadow" href="#"><span class="font-black">EXPLORE WATCH DROP</span><svg class="w-4 h-4 text-black" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg></a><div class="mt-3 pt-2.5 border-t border-neutral-800 flex items-center justify-between text-[10px] text-gray-400 font-medium"><span class="flex items-center space-x-1"><span>⚡</span><span>Ultra-Detailed Mechanical Cut</span></span><span class="flex items-center space-x-1"><span>🔥</span><span>Exclusive Online Drop</span></span></div></div></div>
+</div>
+</section>
+<!-- END: HeroSection -->
+<!-- BEGIN: TrustBanner -->
+<section class="bg-neutral-900 text-white py-3 border-y border-neutral-800" data-purpose="trust-bar">
+<div class="flex overflow-x-auto no-scrollbar px-4 space-x-6 text-[11px] font-bold uppercase tracking-wider text-neutral-300 whitespace-nowrap justify-between">
+<div class="flex items-center space-x-1.5">
+<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill-rule="evenodd"></path>
+</svg>
+<span>Free Shipping Worldwide</span>
+</div>
+<div class="flex items-center space-x-1.5">
+<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm3.707 9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<span>Money Back Guarantee</span>
+</div>
+<div class="flex items-center space-x-1.5">
+<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<span>100% Authentic Merch</span>
+</div>
+</div>
+</section>
+<!-- END: TrustBanner -->
+<!-- BEGIN: MostPopularSection -->
+<section class="py-7 px-4" data-purpose="popular-products">
+<div class="flex items-end justify-between mb-4">
+<div>
+<span class="text-xs font-bold text-red-600 uppercase tracking-widest">Trending Now</span>
+<h2 class="text-xl font-black uppercase text-gray-900 tracking-tight">Most Popular</h2>
+</div>
+<a class="text-xs font-bold text-brand-black hover:underline uppercase tracking-wide" href="#">View all</a>
+</div>
+<!-- Horizontal Swipeable List on Mobile -->
+<div class="flex space-x-4 overflow-x-auto no-scrollbar pb-2 pt-1 -mx-4 px-4 snap-x snap-mandatory">
+<!-- Product 1 -->
+<article class="min-w-[150px] w-[150px] shrink-0 snap-start bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 relative overflow-hidden">
+<img alt="Fushiguro Toji's Warm Worm" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-7WziCC7G0rN-kOiDROf5U_l-_-7MCbr4lFfrpoP-yKWsUNwy_mMEJRxlHDsufRp2AkZJiFy--eWRPmzxbV2c7ZVBeWg1NWC2zzwtIWLpWPSo_C8bQE0HulEv6oxGf9ZGMW_BUAp2pqsvWegAT0eJ4iLEYxVKn90DZX0TKSFGUW4I_TPsiSMiTABJIBoiBe-4TfFK4d9OfTY-Hb8sw5TBp90tM3EV5ZoRIt8r07v-Wkg4i4N5axdY"/>
+<span class="absolute top-2 left-2 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">HOT</span>
+</div>
+<div class="p-2.5">
+<h3 class="text-xs font-bold text-gray-900 line-clamp-1">Fushiguro Toji's Worm</h3>
+<p class="text-xs font-extrabold text-gray-900 mt-1">$39.99</p>
+</div>
+</article>
+<!-- Product 2 -->
+<article class="min-w-[150px] w-[150px] shrink-0 snap-start bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 relative overflow-hidden">
+<img alt="Demon Slayer 3D Motion Sticker" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0SVblqPU9uWzjreMvAqqxM5cQUwvCn6wDEZfxXfYzP15HXa74PGqa0u67nFAkoqKlomZh8QC4CeUa1zxTG4_OsLG1F2v4g53n6pNnxRRaZ4jMnGtQpko38fY-WH6cOElfjL5TKifKZFQ1HInGI8RmwqxtFWmXV05S45VuCc2eT-0glPbiJ9_A34HAFt7FxUwgt1W0dxn2ShT9YINm_iFagzPmgI-QN0NJAL5LA16PCNwu4FY9Gbvo"/>
+</div>
+<div class="p-2.5">
+<h3 class="text-xs font-bold text-gray-900 line-clamp-1">Demon Slayer 3D Sticker</h3>
+<p class="text-xs font-extrabold text-gray-900 mt-1">From $9.99</p>
+</div>
+</article>
+<!-- Product 3 -->
+<article class="min-w-[150px] w-[150px] shrink-0 snap-start bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 relative overflow-hidden">
+<img alt="Inverted Spear of Heaven" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMR5V4VFtH0bbCf6eRZfX4j7HasiJfkvOR_sJA4tVyR-_7kLbO4NOht3_1b0OofDuETigKU1-u41-0_dmmBwkxMh031nF_hZBErgAMuPTQH6zuCELXYHXPTcvqLT_imk2EBWsQ79ltnY16X8VMBb3W1z46vz__6ahLF8TkIa9fqyoR7Nkc7zypRu7V2_f-ov_ZTkuyGEpoWOEzD_sbSg8PFixELNzeEEwUb8RNMUn6cnyj9ZBW9QWV"/>
+</div>
+<div class="p-2.5">
+<h3 class="text-xs font-bold text-gray-900 line-clamp-1">Inverted Spear of Heaven</h3>
+<p class="text-xs font-extrabold text-gray-900 mt-1">$35.99</p>
+</div>
+</article>
+<!-- Product 4 -->
+<article class="min-w-[150px] w-[150px] shrink-0 snap-start bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 relative overflow-hidden">
+<img alt="Gojo BlackLens Glasses" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-BDnCHo5LECJXtLeMg0wnHMRM5TUqcb9pxu4mMVeTeb6vo_5LRzJfQaGZy6qErzVtokag3OVPVvyksqr5g7xadpY5sTWdPdB-nVcHo1I5QJa3M5XBNXqoCMvPFmOOBSDhopjNzVjnr0nZerl1rfVbpmv-z8Bf5U3s1n__1EnzT0NtFQW-sCdHA0_vLYeU3b9OWPUZ2cFGskYMu1KQxqO_I6dF1OCuyBoV27iRwfPgck81pZYrWAId"/>
+</div>
+<div class="p-2.5">
+<h3 class="text-xs font-bold text-gray-900 line-clamp-1">Gojo BlackLens Glasses</h3>
+<p class="text-xs font-extrabold text-gray-900 mt-1">$49.99</p>
+</div>
+</article>
+<!-- Product 5 -->
+<article class="min-w-[150px] w-[150px] shrink-0 snap-start bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 relative overflow-hidden">
+<img alt="Cat Ear Plushie" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvVh81qw1eAC4X0vkefKfCJ6lU5QjYb2jqtIzo91LjPrXIfXZ6aqg4TUKatus72vyN8pCSfcWyqKcEx56ibOi-PIXY2Ue5snAx2bi63WX_D7kHgMKcsTfGC-y9sPrSm0mRjnOB0KUCAQvkQlXPhdb03CRjVsyHKRzYPemflvnCJsfxujWjZc-KD9no0F1FzJvrCVqTu96c_jRAhhXPSDPZsRsPIbD_xcort5vTomVu26FfB3NiloP9"/>
+</div>
+<div class="p-2.5">
+<h3 class="text-xs font-bold text-gray-900 line-clamp-1">Jujutsu Cat-Ear Plush</h3>
+<p class="text-xs font-extrabold text-gray-900 mt-1">From $37.00</p>
+</div>
+</article>
+</div>
+</section>
+<!-- END: MostPopularSection -->
+<!-- BEGIN: CategoryHoodies -->
+<section class="py-6 px-4 bg-white border-t border-gray-200" data-purpose="hoodies-collection">
+<div class="text-center mb-5">
+<h2 class="text-xl font-black uppercase text-gray-900 tracking-tight">Streetwear Hoodies</h2>
+<p class="text-xs text-gray-500 mt-0.5">Heavyweight 450GSM custom anime silhouettes</p>
+</div>
+<!-- 2-Column Product Grid -->
+<div class="grid grid-cols-2 gap-3">
+<!-- Hoodie Item 1 -->
+<div class="bg-gray-50 rounded-xl p-2 border border-gray-100 flex flex-col justify-between">
+<div class="aspect-[4/5] bg-gray-200 rounded-lg overflow-hidden mb-2">
+<img alt="Attack on Titan Hoodie" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ3MDmUSbsOaB1aj7A-Ml6Qj6QBA9gUiz5oMU4GjoNq8fVPPK_iEQyqkqFTwQbd-GlSe-Hbw_qMOtVBYKB9RVA2We_3IdxqMQ2-DvzKm9zhMCO_SB4x-6Yxu5SBUlaWmMn6QgPVrTzDmfsm8QC9Mfoz9eambr0orPL91yNzBxC_kcSJ9UkH5S58IYv8OuzlupNQzVxbE9EipLANKq6o5EIBAWF_7NSB6RPbruapFPtvwlaCYCTX8C5"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">AoT Harajuku Hoodie</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$49.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Add to Cart</button>
+</div>
+<!-- Hoodie Item 2 -->
+<div class="bg-gray-50 rounded-xl p-2 border border-gray-100 flex flex-col justify-between">
+<div class="aspect-[4/5] bg-gray-200 rounded-lg overflow-hidden mb-2">
+<img alt="Demon Slayer Hoodie" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDw7V180Uty6vggpCF7pJ5iKvHVhBZmchf9jCR3ho1HqoWrZATEotcNIIX3RcULikx13hU-gEmD0BBRC4epq4hfoHCtqEDeDEWjLXyBajpF6ZhIftfnDPw0Zq8ceG2IHrinkdwFKtmKas1g9gTX3_64QoLk5me7QU0trvreM2u5eM8rOLMbvl59clOApXYUn1ThJ2-0ddcxXnjyb8DdjfIK5SkoV3sNLtBWf_-YfKnQG5AdSHNS8JCS"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">Nezuko Graphic Hoodie</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$34.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Add to Cart</button>
+</div>
+<!-- Hoodie Item 3 -->
+<div class="bg-gray-50 rounded-xl p-2 border border-gray-100 flex flex-col justify-between">
+<div class="aspect-[4/5] bg-gray-200 rounded-lg overflow-hidden mb-2">
+<img alt="Jujutsu Kaisen Hoodie" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0eK2xIif2afQk7OQShzVBYjr6n4Zu7WwoNqeYpX1k5VZ8UtTYiYoYx0dNAskR7RxJn8VQZx7wkq2e1-STEjBL_Abedxk5hac29wFjIOQYUuM7yt6r--JNPkDx6N7D0yX9c9xfuRtYM8eeVDUtTpch-Q_WuTJs2Ig3jLJ58pHnCBHjfo1RiXKRjHzvhIRPyuHJYMztkaiVTOzZ7bTyGeUiiiZkSaf_2imXCLzJEn6BOsGnopGSPIW2"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">Jujutsu Kaisen Hoodie</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$59.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Add to Cart</button>
+</div>
+<!-- Hoodie Item 4 -->
+<div class="bg-gray-50 rounded-xl p-2 border border-gray-100 flex flex-col justify-between">
+<div class="aspect-[4/5] bg-gray-200 rounded-lg overflow-hidden mb-2">
+<img alt="One Piece Piece Hoodie" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDebxfMxFEyfrn0-r0G2uzN7KhNQhS151oeW61M6eH7zyreiCa0VETagz5GjH1FLKyQwm-_V98rB_OsBunF_L6xFwDnTQGXqcHWqOC2e6y3j2y7ENbin063KmxIV5P_2lte-WHTSnGXVCpYYypxVbljzNX9v9oiu5qbRKxFqgbjr-zhKJseHyJ08eWZ3Q0Ra_y9TC4VfLKln1osgJOQv7GKJyXRXaD57EngOu9FnqkAp9WkmBRQYGnO"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">One Piece Sun God Hoodie</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$39.90</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Add to Cart</button>
+</div>
+</div>
+<div class="mt-4 text-center">
+<button class="w-full py-2.5 border border-brand-black text-brand-black font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-gray-100">
+        View All Hoodies (18)
+      </button>
+</div>
+</section>
+<!-- END: CategoryHoodies -->
+<!-- BEGIN: CategoryTShirts -->
+<section class="py-6 px-4 bg-gray-50 border-t border-gray-200" data-purpose="tshirts-collection">
+<div class="text-center mb-5">
+<h2 class="text-xl font-black uppercase text-gray-900 tracking-tight">Graphic T-Shirts</h2>
+<p class="text-xs text-gray-500 mt-0.5">Oversized vintage wash &amp; distressed prints</p>
+</div>
+<!-- 2-Column Product Grid -->
+<div class="grid grid-cols-2 gap-3">
+<!-- Tee 1 -->
+<div class="bg-white rounded-xl p-2 border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2">
+<img alt="Attack on Titan T-shirt" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNW603OUS2TNjE0ty_tSvyet8ZmoUXeu6xaQ96vudT9aivsjRbb2SOLQhLtynBgO3GNuNdR_G7HsGCrXY78u0nmYBcK5dH2kTnCS2plpv6_scLwnSNLh0rDKK-ndCm6nefBpRDdlI9NB7SZTr1hxNABrORI0GKY8aIOBiuOEgwFqwycmC0xcyLHVBV5OGmUvzT2FLvAyD7fofvynLgOcIr7MJ_J6NaxWQTwlVCH7arOR9Kihsv4wiD"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">Attack on Titan T-Shirt</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$29.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Quick Add</button>
+</div>
+<!-- Tee 2 -->
+<div class="bg-white rounded-xl p-2 border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2">
+<img alt="One Piece Washed Tee" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAiy3BMEGxtgNToJjAiO5lvNym1EtJzZX_IoF06JB_Ue7YT3WuG_NkxyzTbnQp42rKHv12SLlMP45TzuVOMWRBiHbiN3RCg_z_5M1JmM3fqPiXyunC9-59-ZFNm4OUOkndts7G9i9tNhwFgpWoadKFyPTRS1N2069XQ5pdaCjdTQZrkB27qiPGuZp-rpb3ymN018rfKOWY-JizgPKFo0MyVNSqQhaZQOIMt9hbwGTuRgZTZwniOGH7a"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">One Piece Washed Tee</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$39.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Quick Add</button>
+</div>
+<!-- Tee 3 -->
+<div class="bg-white rounded-xl p-2 border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2">
+<img alt="JoJo Bizarre Adventure Tee" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDt8aTLVY_VKhmzCL0pth_9ofsRt8y2iX3u9fyAc4JTN0b7rHm8lv5DfwiyBYxgEFMaHtPgsgoGtQvICKyakqDtE1abUTfEnM1uAK7GQJlcR3UTDk14XREIvw6G2DWZ52LWgcssYw-Zsa6ZBfzo7eOIYMKJ_sg-fU2M5Aqwzb0PJ1H90Zpbnoh1EfT_HtYsWWHgUv02ki1ta2eQEj-0QrwZZ-jBSAcyno9ItXAcavUT8iH1Z5Y6SBUl"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">JoJo's Bizarre Adventure Tee</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$29.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Quick Add</button>
+</div>
+<!-- Tee 4 -->
+<div class="bg-white rounded-xl p-2 border border-gray-100 shadow-sm flex flex-col justify-between">
+<div class="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2">
+<img alt="Toji Behind Vintage T-shirt" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDolOPRm3GQBRcISX65qiQyvxHNwpozZNaJCgqRHf5R0cc2OlckbN9IBVcj45NqNQtg2C-EK8ZQyLJadf-nYObjK5rgmGw-83PB8YIR0uBObO_a21-fBOmr-6AfAn77hJ_Hhy3rv_0ykvYZb6AfBNwixjOSWJPPf_0hVagaSLbFLNSwf1CgSM7OneY8OACMHKG9d3v6O6ah-o0UUL5-Xp5pZCgYtIjEJiqcfzZ9_tpRdON0tku_dzym"/>
+</div>
+<div>
+<h3 class="text-xs font-bold text-gray-800 line-clamp-1">Toji Streetwear Tee</h3>
+<p class="text-xs font-black text-gray-950 mt-1">$49.99</p>
+</div>
+<button class="mt-2 w-full py-1.5 bg-brand-black text-white text-[11px] font-bold rounded uppercase">Quick Add</button>
+</div>
+</div>
+<div class="mt-4 text-center">
+<button class="w-full py-2.5 bg-brand-black text-white font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-neutral-800 shadow">
+        View All T-Shirts
+      </button>
+</div>
+</section>
+<!-- END: CategoryTShirts -->
+<!-- BEGIN: ShopByAnimeGrid -->
+<section class="py-8 px-4 bg-white border-t border-gray-200" data-purpose="anime-universes-grid">
+<div class="text-center mb-6">
+<span class="text-xs font-extrabold text-red-600 uppercase tracking-widest">Find Your Universe</span>
+<h2 class="text-2xl font-black uppercase tracking-tight text-gray-950">Shop By Anime</h2>
+</div>
+<div class="grid grid-cols-2 gap-3.5">
+<!-- Attack on Titan -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Attack on Titan Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2YH_KbzeU69GvYL12nSOEx060Y1hDz79G21wHSA8_z3amsgVThk1ihJg2pqLZMhUaLBEbSBaSOGbdwacWPj4vMANzy_dMV8sJ6yzpzdrE4KMTsuRcp_KRXxF3BD7UegAEQXBWI2aMl5IaCcaO0s-15blHYZPfht0JN81niMUU6kJJ9p0ruffiYI2C55ChqxvhT5f1oeB5ccqaBZnrGdAmQHKg4TZiURuvZJP0aaXz5uJ3UDP08uWP"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Attack On Titan
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Demon Slayer -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Demon Slayer Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBabjgfmc6UZnVgbC9AjPJTwuFtz8nQUHj2n2EucLYqM8001QNkQ1_gRLwbPTon6_XivZr_UWr84veJ0C2kTXdopCxz4tGVWynGzzyBKa_JOat5fiQBGSiXbuOM6TbbADzFOZLpW3h2EfnaYIECtPBNnXVgMe4AMYI-NjohbHi2Nj63DneAlBwtVxwRQ1i594Od4JF2bl6Lm_LF1RcsXfWeBghBFdXRBX8XJcC6JSNocKTjfmhrMQAT"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Demon Slayer
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Jujutsu Kaisen -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Jujutsu Kaisen Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0ZCSciWsK6dS8B0y8-kCwJoe767WZC_bhcq9DE6LsWosBBcU-lwbaAac37AI3D0E49CTfRNRbmcfEMJNSYJLRS-W92-5eBRe-QBcukoZFCfuzdaynqJ3xU9C4pzgP_ruubdBh2RifK8kgwmWNFtUQiBfHK74KaedeG7X65e1GEyOYatIYDeGJ2uRpxh-wkZzxIdgB3V8JpNxpc7BHAelcDu7Bnm436jRO-IT0nzJpP7OW009lgANv"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Jujutsu Kaisen
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Dragon Ball -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Dragon Ball Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgcxsYKwS40umLMVrGk44s-cXJUCrWtdaMtRIqoYQZJq04nyWP3qaMUgeMAHH0LY3XCpZWTm5RUnI5mFiAI-JVbL3Oy4XnEhQ8vw8Jjfw6NtGpvJrA9Z5J0Y4fXBGnvltKz8cN-ift5neUgZxtKPB4UxTFsyTUM9307UhA40w8hSZqQgl50Q2DVdROMsVyZMFl9WQuWBid7qDsrx47o1VwECA9Sd2hAmCYDG3QqgAi19WqEZBC0tsU"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Dragon Ball
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- One Piece -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="One Piece Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-7bqnxN2IOKkyE16V7O2gbUd6aVJJldGCJml7GS2ZMmDp2Muke2DVZvTNDn_ruxJ0_OUDdcJplXgMCva563zCRoA3cfOqd5bEm7JycE_QmpB2ePI0T2tQdCD2oHiJ9suNBnjU3A8V6h4VXPwt8bao0NzHfaInZsqiCiNrO6JWy6aLzrTplacPqdZH7RfS0t80gM4l3hyyVgLnSW3AOftox688DCvZgqspL38RGGq7qrdCTQ9xqK4A"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            One Piece
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Naruto -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Naruto Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaRYFPz-q905ExGzbkKsw5WSO621hvgM1gAWECOmAp3XQoaBrz0YBj4V2bTc0lJeUECeW3UgW2y9p-HdW8gt3BO3LMYHUhn8ruF5AOizgqFyjgtO2gmM27jdVC9nPDoP0UGHS8Xw8rd3-g6w9qQ0x8y1tVq9EtP6TRmNl6DeDXMYbOn9bzcf9OttQDLHlxwC__rKxblyyfogboUYggb8_sQeyBrJPaJIB_vZqJ8F6Mfqq2pEU7YD72"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Naruto
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Tokyo Revengers -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Tokyo Revengers Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVGh2Q0HzwcGyFjGLbq6-l1JUQgzXG8j2ra6EKHMcUhCEYkQCJT65xPdPPz-Xs8V_CzeP2t90mY79zZZ9-481l8gIGKSChLIYz3KvvqLIER475JJ64B0fETwAWURwRLGDadZ_pRsZL904yrnhXqbpW9oGFAXQYQCISn-aMpMBM5O8bvJecWk6_HYzdIUQqZdsK175AMBytHSsRq5yrB1e8loTmW3DW9m2AHmzx9C7Q4Gk0AcTBkClv"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Tokyo Revengers
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+<!-- Hunter X Hunter -->
+<a class="group relative rounded-xl overflow-hidden border border-gray-200 bg-black aspect-[16/10] shadow-sm" href="#">
+<img alt="Hunter X Hunter Collection" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApgys7WiFVf7R49osj_ZArHOrTz4RK9epq1Qad9dqIp_yvXVX2B1yMDkTKr0GKKQRj00WEB5ucSjR1zkWirkhTh-IiuIbs1q2qnNptef_omD5X7ee5G1Oax6ZBrAfjTaVRPb1kf76TQgzVBly7F4KeoZqx026uc0QAL-EHC_8KWJeZsfqf1TOsVWuUATON_eq98w-Lp1Vj_YmWmyZrXl1UuvzsSf-ngI2ft_p9hDUdacEWqTHzmvNW"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-2.5">
+<span class="text-xs font-black text-white uppercase flex items-center justify-between w-full">
+            Hunter X Hunter
+            <svg class="w-3.5 h-3.5 ml-1 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</span>
+</div>
+</a>
+</div>
+</section>
+<!-- END: ShopByAnimeGrid -->
+<!-- BEGIN: ValueProposition & Stats -->
+<section class="py-8 px-4 bg-white border-t border-gray-200" data-purpose="why-choose-us">
+<div class="text-center mb-6">
+<h2 class="text-2xl font-black uppercase tracking-tight text-gray-950">Why Choose Us?</h2>
+<p class="text-xs text-gray-600 max-w-xs mx-auto mt-1">
+        Tryvoal is built to serve authentic and coolest looking anime products to true anime lovers and fans!
+      </p>
+</div>
+<!-- Comparison Table matching reference screenshot -->
+<div class="rounded-xl overflow-hidden border border-gray-200 shadow-sm mb-8">
+<div class="grid grid-cols-3 bg-brand-black text-white text-xs font-bold py-2.5 px-3 text-center items-center">
+<span class="text-left font-extrabold text-gray-300">Feature</span>
+<span class="text-amber-400 font-black">TRYVOAL™</span>
+<span class="text-gray-400 font-normal">Others</span>
+</div>
+<div class="divide-y divide-gray-100 text-xs">
+<div class="grid grid-cols-3 py-2.5 px-3 items-center text-center">
+<span class="text-left font-medium text-gray-900">Iconic Designs</span>
+<span class="text-emerald-600 font-bold">✔</span>
+<span class="text-red-500 font-bold">✖</span>
+</div>
+<div class="grid grid-cols-3 py-2.5 px-3 items-center text-center bg-gray-50/50">
+<span class="text-left font-medium text-gray-900">Quality Materials</span>
+<span class="text-emerald-600 font-bold">✔</span>
+<span class="text-red-500 font-bold">✖</span>
+</div>
+<div class="grid grid-cols-3 py-2.5 px-3 items-center text-center">
+<span class="text-left font-medium text-gray-900">(Actually) Fast Shipping</span>
+<span class="text-emerald-600 font-bold">✔</span>
+<span class="text-red-500 font-bold">✖</span>
+</div>
+<div class="grid grid-cols-3 py-2.5 px-3 items-center text-center bg-gray-50/50">
+<span class="text-left font-medium text-gray-900">Money Back Guarantee</span>
+<span class="text-emerald-600 font-bold">✔</span>
+<span class="text-red-500 font-bold">✖</span>
+</div>
+</div>
+</div>
+<!-- Trust Milestones Section -->
+<div class="space-y-3">
+<div class="flex items-center p-3 rounded-xl bg-gray-50 border border-gray-200">
+<div class="w-12 h-12 rounded-full border-2 border-brand-black flex items-center justify-center font-black text-xs shrink-0 bg-white">
+          90%
+        </div>
+<div class="ml-3.5">
+<h3 class="text-xs font-bold text-gray-900">More Than 4 Years In The Market!</h3>
+<p class="text-[11px] text-gray-500">Established source for rare imported drops.</p>
+</div>
+</div>
+<div class="flex items-center p-3 rounded-xl bg-gray-50 border border-gray-200">
+<div class="w-12 h-12 rounded-full border-2 border-brand-black flex items-center justify-center font-black text-xs shrink-0 bg-white">
+          95%
+        </div>
+<div class="ml-3.5">
+<h3 class="text-xs font-bold text-gray-900">More than 10,000+ Happy Customers!</h3>
+<p class="text-[11px] text-gray-500">Serving manga lovers in 48+ countries.</p>
+</div>
+</div>
+<div class="flex items-center p-3 rounded-xl bg-gray-50 border border-gray-200">
+<div class="w-12 h-12 rounded-full border-2 border-brand-black flex items-center justify-center font-black text-xs shrink-0 bg-white">
+          99%
+        </div>
+<div class="ml-3.5">
+<h3 class="text-xs font-bold text-gray-900">2000+ Viral Social Media Videos</h3>
+<p class="text-[11px] text-gray-500">Trending constantly across TikTok &amp; IG.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- END: ValueProposition & Stats -->
+<!-- BEGIN: Footer -->
+<footer class="bg-brand-black text-white pt-10 pb-6 px-4 border-t border-neutral-800" data-purpose="main-footer">
+<div class="space-y-6">
+<!-- Brand & Mission -->
+<div>
+<span class="text-2xl font-black tracking-tight uppercase font-mono">Tryvoal</span>
+<span class="text-xs text-red-500 font-bold ml-1 uppercase">Anime store</span>
+<p class="text-xs text-gray-400 mt-2 leading-relaxed">
+          Tryvoal was created to serve and provide the coolest and most awesome looking anime street apparel and cursed collectibles.
+        </p>
+</div>
+<!-- Email Newsletter -->
+<div class="bg-neutral-900 p-4 rounded-xl border border-neutral-800">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-200 mb-1">Subscribe to Secret Drops</h3>
+<p class="text-xs text-gray-400 mb-3">Join our email list for exclusive offers and the latest news.</p>
+<form class="space-y-2" onsubmit="event.preventDefault();">
+<input class="w-full bg-black border border-neutral-700 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-red-500" placeholder="Enter your email" type="email"/>
+<button class="w-full bg-white text-black font-bold text-xs uppercase py-2 rounded-lg" type="submit">Subscribe</button>
+</form>
+</div>
+<!-- Quick Navigation Accordion / Link Grid -->
+<div class="grid grid-cols-2 gap-4 text-xs text-gray-400 pt-2">
+<div class="space-y-2">
+<h4 class="font-bold text-white uppercase text-[11px] tracking-wider">Quick Links</h4>
+<ul class="space-y-1.5">
+<li><a class="hover:text-white" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-white" href="#">Return &amp; Refund Policy</a></li>
+<li><a class="hover:text-white" href="#">Shipping Policy</a></li>
+<li><a class="hover:text-white" href="#">Terms of Service</a></li>
+</ul>
+</div>
+<div class="space-y-2">
+<h4 class="font-bold text-white uppercase text-[11px] tracking-wider">Support</h4>
+<ul class="space-y-1.5">
+<li><a class="hover:text-white" href="#">Track Your Order</a></li>
+<li><a class="hover:text-white" href="#">Affiliate Program</a></li>
+<li><a class="hover:text-white" href="#">Contact Us</a></li>
+<li><a class="hover:text-white" href="#">FAQ</a></li>
+</ul>
+</div>
+</div>
+<!-- Payment Badges & Copyright -->
+<div class="pt-6 border-t border-neutral-800 text-center space-y-3">
+<div class="flex justify-center space-x-2 text-[10px] text-gray-400 uppercase font-mono">
+<span class="px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">Apple Pay</span>
+<span class="px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">Visa</span>
+<span class="px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">Mastercard</span>
+<span class="px-2 py-0.5 bg-neutral-900 rounded border border-neutral-800">PayPal</span>
+</div>
+<p class="text-[11px] text-neutral-500">
+          © 2026, <span class="font-semibold text-neutral-300">Tryvoal : Anime store</span>. All rights reserved.
+        </p>
+</div>
+</div>
+</footer>
+<!-- END: Footer -->
+<!-- BEGIN: BottomNavigationMobile -->
+<!-- iOS Bottom Floating Nav Bar -->
+<nav class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 py-2 px-6 flex justify-between items-center z-50 text-[10px] font-bold text-gray-700" data-purpose="mobile-sticky-nav">
+<a class="flex flex-col items-center text-red-600" href="#">
+<svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span>Shop</span>
+</a>
+<a class="flex flex-col items-center hover:text-gray-950" href="#">
+<svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span>Anime</span>
+</a>
+<a class="flex flex-col items-center hover:text-gray-950" href="#">
+<svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span>Wishlist</span>
+</a>
+<a class="flex flex-col items-center hover:text-gray-950 relative" href="#">
+<span class="absolute -top-1 right-1 bg-red-600 text-white rounded-full text-[9px] w-3.5 h-3.5 flex items-center justify-center font-bold">2</span>
+<svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span>Cart</span>
+</a>
+</nav>
+<!-- END: BottomNavigationMobile -->
+<!-- BEGIN: InteractiveScripts -->
+<script data-purpose="countdown-timer">
+    // Simple mock countdown for the hero promo banner
+    let totalSeconds = 173; // 2 min 53 sec
+    const timerElement = document.getElementById('countdown');
+    
+    if (timerElement) {
+      setInterval(() => {
+        if (totalSeconds > 0) {
+          totalSeconds--;
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          timerElement.textContent = 
+            `${String(minutes).padStart(2, '0')}m : ${String(seconds).padStart(2, '0')}s`;
+        }
+      }, 1000);
+    }
+  </script>
+<!-- END: InteractiveScripts -->
+</body></html>

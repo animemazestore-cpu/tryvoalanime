@@ -6,6 +6,7 @@ import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AppDownloadPopup } from './components/common/AppDownloadPopup';
 import { FloatingConcierge } from './components/common/FloatingConcierge';
+import { MobileBottomNav } from './components/common/MobileBottomNav';
 
 // Import Pages
 import { Home } from './pages/Home';
@@ -86,6 +87,9 @@ export const App: React.FC = () => {
 
       {/* Global App Download Popup */}
       <AppDownloadPopup />
+
+      {/* Mobile Bottom Floating Navigation */}
+      <MobileBottomNav />
     </Router>
   );
 };
