@@ -19,7 +19,7 @@ import { useCatalogStore } from '../store/useCatalogStore';
 import { Button } from '../components/common/Button';
 import { ProductCard } from '../components/product/ProductCard';
 import { ProductCardSkeleton } from '../components/product/ProductCardSkeleton';
-import { ANIME_SERIES_LIST } from '../lib/catalogQueries';
+import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry } from '../lib/catalogQueries';
 
 // Curated Anime Merch Facets
 const FINISH_FACETS = [
@@ -145,6 +145,21 @@ export const Shop: React.FC = () => {
     if (urlSort) setSortBy(urlSort);
   }, [searchParams]);
 
+  // Dynamic Anime Series (Universe / Sub-categories) with custom thumbnails
+  const [animeSeriesList, setAnimeSeriesList] = useState<AnimeSeriesEntry[]>(() => getAllAnimeSeries());
+
+  useEffect(() => {
+    fetchAnimeThumbnails().then(() => {
+      setAnimeSeriesList(getAllAnimeSeries());
+    });
+
+    const handleUpdate = () => {
+      setAnimeSeriesList(getAllAnimeSeries());
+    };
+    window.addEventListener('anime_thumbnails_updated', handleUpdate);
+    return () => window.removeEventListener('anime_thumbnails_updated', handleUpdate);
+  }, []);
+
   // Sync state back to URL query parameters
   const updateUrlParam = useCallback(
     (key: string, value: string | null) => {
@@ -250,7 +265,7 @@ export const Shop: React.FC = () => {
 
         // Anime Universe / Sub-category matching
         if (selectedAnime !== 'all') {
-          const seriesObj = ANIME_SERIES_LIST.find((s) => s.id === selectedAnime);
+          const seriesObj = animeSeriesList.find((s) => s.id === selectedAnime);
           if (seriesObj && seriesObj.aliases) {
             const matchesSeries = seriesObj.aliases.some((alias) => {
               const a = alias.toLowerCase();
@@ -471,7 +486,7 @@ export const Shop: React.FC = () => {
               </span>
               {selectedAnime !== 'all' && (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-neutral-900 text-white">
-                  Universe: {ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label || selectedAnime}
+                  Universe: {animeSeriesList.find((s) => s.id === selectedAnime)?.label || selectedAnime}
                 </span>
               )}
             </div>
@@ -479,7 +494,7 @@ export const Shop: React.FC = () => {
               {selectedCategory === 'All'
                 ? selectedAnime === 'all'
                   ? 'Anime Apparel & Collectibles'
-                  : `${ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label} Drops`
+                  : `${animeSeriesList.find((s) => s.id === selectedAnime)?.label} Drops`
                 : `${selectedCategory}`}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
@@ -509,19 +524,27 @@ export const Shop: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar scroll-smooth">
-            {ANIME_SERIES_LIST.map((series) => {
+            {animeSeriesList.map((series) => {
               const isSelected = selectedAnime === series.id;
               return (
                 <button
                   key={series.id}
                   type="button"
                   onClick={() => handleAnimeSelect(series.id)}
-                  className={`flex-shrink-0 inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all border ${
+                  className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all border ${
                     isSelected
                       ? 'bg-red-600 text-white border-red-500 shadow-md ring-2 ring-red-400/40'
                       : 'bg-neutral-800 text-neutral-200 border-neutral-700 hover:border-neutral-500 hover:bg-neutral-700'
                   }`}
                 >
+                  {series.id !== 'all' && series.image_url && (
+                    <img
+                      src={series.image_url}
+                      alt=""
+                      className="w-4 h-4 rounded-full object-cover border border-white/20 flex-shrink-0"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                  )}
                   <span>{series.short || series.label}</span>
                 </button>
               );
@@ -682,7 +705,7 @@ export const Shop: React.FC = () => {
 
             {selectedAnime !== 'all' && (
               <span className="inline-flex items-center gap-1 bg-neutral-900 text-white border border-neutral-700 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs">
-                Anime: {ANIME_SERIES_LIST.find((s) => s.id === selectedAnime)?.label || selectedAnime}
+                Anime: {animeSeriesList.find((s) => s.id === selectedAnime)?.label || selectedAnime}
                 <button onClick={() => handleAnimeSelect('all')} className="hover:text-red-400">
                   <X className="h-3 w-3" />
                 </button>
@@ -849,20 +872,28 @@ export const Shop: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
-                {ANIME_SERIES_LIST.map((series) => {
+                {animeSeriesList.map((series) => {
                   const isSelected = selectedAnime === series.id;
                   return (
                     <button
                       key={series.id}
                       type="button"
                       onClick={() => handleAnimeSelect(series.id)}
-                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all inline-flex items-center gap-1.5 ${
                         isSelected
                           ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs font-bold'
                           : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      {series.label}
+                      {series.id !== 'all' && series.image_url && (
+                        <img
+                          src={series.image_url}
+                          alt=""
+                          className="w-3.5 h-3.5 rounded-full object-cover border border-gray-300 flex-shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <span>{series.label}</span>
                     </button>
                   );
                 })}
@@ -1109,18 +1140,26 @@ export const Shop: React.FC = () => {
                       >
                         All Universes
                       </button>
-                      {ANIME_SERIES_LIST.map((series) => (
+                      {animeSeriesList.map((series) => (
                         <button
                           key={series.id}
                           type="button"
                           onClick={() => handleAnimeSelect(series.id)}
-                          className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${
+                          className={`text-xs px-2.5 py-1 rounded-lg border font-medium inline-flex items-center gap-1.5 ${
                             selectedAnime === series.id
                               ? 'bg-neutral-900 text-white border-neutral-900 font-bold'
                               : 'bg-white border-gray-200 text-gray-700'
                           }`}
                         >
-                          {series.short || series.label}
+                          {series.id !== 'all' && series.image_url && (
+                            <img
+                              src={series.image_url}
+                              alt=""
+                              className="w-3.5 h-3.5 rounded-full object-cover border border-gray-300 flex-shrink-0"
+                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                            />
+                          )}
+                          <span>{series.short || series.label}</span>
                         </button>
                       ))}
                     </div>

@@ -172,21 +172,7 @@ export const FALLBACK_CATEGORIES: Category[] = [
   },
 ];
 
-// Curated Anime Universes / Sub-categories
-export const ANIME_SERIES_LIST = [
-  { id: 'all', label: 'All Anime', short: 'All' },
-  { id: 'jjk', label: 'Jujutsu Kaisen', short: 'JJK', aliases: ['jjk', 'jujutsu', 'gojo', 'sukuna', 'toji', 'megumi', 'itadori'] },
-  { id: 'bleach', label: 'Bleach', short: 'BLEACH', aliases: ['bleach', 'ichigo', 'aizen', 'bankai', 'gotei', 'shinigami'] },
-  { id: 'naruto', label: 'Naruto', short: 'NARUTO', aliases: ['naruto', 'sasuke', 'itachi', 'akatsuki', 'kakashi', 'shippuden'] },
-  { id: 'one-piece', label: 'One Piece', short: 'ONE PIECE', aliases: ['one piece', 'luffy', 'zoro', 'sanji', 'nika', 'straw hat'] },
-  { id: 'demon-slayer', label: 'Demon Slayer', short: 'DEMON SLAYER', aliases: ['demon slayer', 'kimetsu', 'tanjiro', 'nezuko', 'zenitsu', 'rengoku'] },
-  { id: 'aot', label: 'Attack on Titan', short: 'AOT', aliases: ['attack on titan', 'aot', 'eren', 'levi', 'survey corps', 'mikasa'] },
-  { id: 'dragon-ball', label: 'Dragon Ball', short: 'DRAGON BALL', aliases: ['dragon ball', 'goku', 'vegeta', 'gohan', 'saiyan', 'dbz'] },
-  { id: 'solo-leveling', label: 'Solo Leveling', short: 'SOLO LEVELING', aliases: ['solo leveling', 'sung jinwoo', 'shadow monarch', 'arise'] },
-  { id: 'berserk', label: 'Berserk', short: 'BERSERK', aliases: ['berserk', 'guts', 'griffith', 'brand of sacrifice'] },
-  { id: 'chainsaw-man', label: 'Chainsaw Man', short: 'CHAINSAW MAN', aliases: ['chainsaw man', 'denji', 'makima', 'power', 'pochita'] },
-  { id: 'hunter-x-hunter', label: 'Hunter X Hunter', short: 'HXH', aliases: ['hunter x hunter', 'hxh', 'killua', 'gon', 'kurapika'] },
-  { id: 'death-note', label: 'Death Note', short: 'DEATH NOTE', aliases: ['death note', 'light', 'ryuk', 'l'] },
-];
+export { DEFAULT_ANIME_SERIES as ANIME_SERIES_LIST, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail } from './animeSubcategories';
+export type { AnimeSeriesEntry } from './animeSubcategories';
 
 export const FALLBACK_PRODUCTS: Product[] = [];

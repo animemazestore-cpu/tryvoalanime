@@ -12,17 +12,10 @@ import { ProductVariantEditor } from '../components/admin/ProductVariantEditor';
 import type { OptionDraft, VariantDraft } from '../components/admin/ProductVariantEditor';
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
-import { FALLBACK_CATEGORIES, ANIME_SERIES_LIST } from '../lib/catalogQueries';
+import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, type AnimeSeriesEntry } from '../lib/catalogQueries';
 import { DEFAULT_HERO_CONFIG, getCachedHeroConfig, fetchHeroConfig, saveHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
 import type { QikinkConfig } from '../lib/qikink';
-
-interface AnimeSeriesEntry {
-  id: string;
-  label: string;
-  short: string;
-  aliases?: string[];
-}
 
 export const Admin: React.FC = () => {
   const navigate = useNavigate();
@@ -37,7 +30,7 @@ export const Admin: React.FC = () => {
 
   // Sub-categories / Anime Universes state
   const [activeCategoryView, setActiveCategoryView] = useState<'main' | 'subcategories'>('main');
-  const [customAnimeList, setCustomAnimeList] = useState<Array<{ id: string; label: string; short: string; aliases: string[] }>>(() => {
+  const [customAnimeList, setCustomAnimeList] = useState<AnimeSeriesEntry[]>(() => {
     try {
       const stored = localStorage.getItem('tryvoal_custom_anime_series');
       return stored ? JSON.parse(stored) : [];
@@ -45,8 +38,18 @@ export const Admin: React.FC = () => {
       return [];
     }
   });
+  const [animeThumbnails, setAnimeThumbnails] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('tryvoal_anime_thumbnails');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [editingAnimeSeries, setEditingAnimeSeries] = useState<AnimeSeriesEntry | null>(null);
   const [isAnimeModalOpen, setIsAnimeModalOpen] = useState(false);
-  const [animeForm, setAnimeForm] = useState({ label: '', id: '', short: '' });
+  const [animeForm, setAnimeForm] = useState({ label: '', id: '', short: '', image_url: '' });
+  const [savingAnime, setSavingAnime] = useState(false);
   const [selectedAnimeFilter, setSelectedAnimeFilter] = useState('all');
   
   // Mobile drawer state
@@ -379,17 +382,31 @@ export const Admin: React.FC = () => {
     }
   };
 
-  // Computed all anime series (default list + custom ones created by admin)
+  // Computed all anime series (core series + custom ones created by admin, with custom thumbnails)
   const allAnimeSeries: AnimeSeriesEntry[] = useMemo(() => {
-    return [
-      ...(ANIME_SERIES_LIST as AnimeSeriesEntry[]),
-      ...customAnimeList.filter((c: any) => !ANIME_SERIES_LIST.some((a: any) => a.id === c.id))
-    ];
-  }, [customAnimeList]);
+    return getAllAnimeSeries(customAnimeList, animeThumbnails);
+  }, [customAnimeList, animeThumbnails]);
 
   // Load hero config on mount
   useEffect(() => {
     fetchHeroConfig().then(setHeroConfig);
+  }, []);
+
+  // Load anime thumbnails on mount and listen to updates
+  useEffect(() => {
+    fetchAnimeThumbnails().then((data) => {
+      if (data && Object.keys(data).length > 0) {
+        setAnimeThumbnails((prev) => ({ ...prev, ...data }));
+      }
+    });
+
+    const handleThumbnailsUpdated = (e: any) => {
+      if (e.detail) {
+        setAnimeThumbnails(e.detail);
+      }
+    };
+    window.addEventListener('anime_thumbnails_updated', handleThumbnailsUpdated);
+    return () => window.removeEventListener('anime_thumbnails_updated', handleThumbnailsUpdated);
   }, []);
 
   const handleSaveHero = async () => {
@@ -415,23 +432,101 @@ export const Admin: React.FC = () => {
     alert('Hero Main Ad reset to default successfully!');
   };
 
-  const handleAddAnimeSeries = (e: React.FormEvent) => {
+  const handleEditAnimeSeries = (series: AnimeSeriesEntry) => {
+    setEditingAnimeSeries(series);
+    setAnimeForm({
+      label: series.label,
+      id: series.id,
+      short: series.short,
+      image_url: animeThumbnails[series.id] || series.image_url || '',
+    });
+    setIsAnimeModalOpen(true);
+  };
+
+  const handleSaveAnimeSeries = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!animeForm.label.trim()) return;
-    const slug = animeForm.id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || animeForm.label.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-    const shortCode = animeForm.short.trim().toUpperCase() || animeForm.label.trim().slice(0, 3).toUpperCase();
-    const newEntry = {
-      id: slug,
-      label: animeForm.label.trim(),
-      short: shortCode,
-      aliases: [slug, animeForm.label.trim().toLowerCase(), shortCode.toLowerCase()]
-    };
-    const updated = [...customAnimeList.filter(a => a.id !== slug), newEntry];
-    setCustomAnimeList(updated);
-    localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
-    setAnimeForm({ label: '', id: '', short: '' });
-    setIsAnimeModalOpen(false);
-    alert(`Anime sub-category "${newEntry.label}" added successfully!`);
+    setSavingAnime(true);
+
+    try {
+      const slug = editingAnimeSeries
+        ? editingAnimeSeries.id
+        : animeForm.id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') ||
+          animeForm.label.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+      const shortCode =
+        animeForm.short.trim().toUpperCase() ||
+        (editingAnimeSeries?.short ?? animeForm.label.trim().slice(0, 3).toUpperCase());
+
+      const imageUrl = animeForm.image_url.trim();
+
+      // 1. If editing an existing series
+      if (editingAnimeSeries) {
+        // Save thumbnail override
+        if (imageUrl) {
+          const res = await saveAnimeSeriesThumbnail(slug, imageUrl);
+          setAnimeThumbnails((prev) => ({ ...prev, [slug]: imageUrl }));
+          if (res.error) {
+            console.warn('Anime thumbnail database sync notice:', res.error);
+          }
+        }
+
+        // If it's a custom series, update name/code in custom list
+        const isCustom = customAnimeList.some((c) => c.id === slug);
+        if (isCustom) {
+          const updatedCustom = customAnimeList.map((c) =>
+            c.id === slug
+              ? {
+                  ...c,
+                  label: animeForm.label.trim(),
+                  short: shortCode,
+                  image_url: imageUrl,
+                  aliases: Array.from(
+                    new Set([
+                      ...(c.aliases || []),
+                      slug,
+                      animeForm.label.trim().toLowerCase(),
+                      shortCode.toLowerCase(),
+                    ])
+                  ),
+                }
+              : c
+          );
+          setCustomAnimeList(updatedCustom);
+          localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updatedCustom));
+        }
+
+        alert(`Sub-category "${animeForm.label.trim()}" thumbnail updated successfully!`);
+      } else {
+        // 2. Creating a new custom anime series
+        const newEntry: AnimeSeriesEntry = {
+          id: slug,
+          label: animeForm.label.trim(),
+          short: shortCode,
+          aliases: [slug, animeForm.label.trim().toLowerCase(), shortCode.toLowerCase()],
+          image_url: imageUrl,
+        };
+
+        const updated = [...customAnimeList.filter((a) => a.id !== slug), newEntry];
+        setCustomAnimeList(updated);
+        localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
+
+        if (imageUrl) {
+          await saveAnimeSeriesThumbnail(slug, imageUrl);
+          setAnimeThumbnails((prev) => ({ ...prev, [slug]: imageUrl }));
+        }
+
+        alert(`Anime sub-category "${newEntry.label}" added successfully!`);
+      }
+
+      setAnimeForm({ label: '', id: '', short: '', image_url: '' });
+      setEditingAnimeSeries(null);
+      setIsAnimeModalOpen(false);
+    } catch (err: any) {
+      alert(`Error saving sub-category: ${err?.message || err}`);
+    } finally {
+      setSavingAnime(false);
+    }
   };
 
   const handleDeleteAnimeSeries = (id: string) => {
@@ -2601,7 +2696,8 @@ export const Admin: React.FC = () => {
                     </Button>
                   ) : (
                     <Button size="sm" onClick={() => {
-                      setAnimeForm({ label: '', id: '', short: '' });
+                      setEditingAnimeSeries(null);
+                      setAnimeForm({ label: '', id: '', short: '', image_url: '' });
                       setIsAnimeModalOpen(true);
                     }}>
                       <Plus className="mr-1.5 h-4 w-4" /> Add Anime Universe
@@ -2747,34 +2843,51 @@ export const Admin: React.FC = () => {
                         );
                       }).length;
                       const isCustom = customAnimeList.some((c) => c.id === series.id);
+                      const thumbUrl = animeThumbnails[series.id] || series.image_url || '/placeholder.jpg';
 
                       return (
                         <div key={series.id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-mono text-[10px] font-black tracking-wider">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="relative w-12 h-12 flex-shrink-0">
+                              <img
+                                src={thumbUrl}
+                                alt={series.label}
+                                className="w-12 h-12 object-cover rounded-xl bg-white border border-gray-200 shadow-xs"
+                                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
+                              />
+                              <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-md bg-red-600 text-white font-mono text-[9px] font-black tracking-wider shadow-xs leading-none">
                                 {series.short}
                               </span>
-                              <p className="font-bold text-gray-900 text-sm truncate">{series.label}</p>
                             </div>
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <span className="text-[11px] text-gray-500 font-mono">
-                                Slug: {series.id}
-                              </span>
-                              <span className="text-[11px] font-bold text-primary">
-                                • {count} Product{count === 1 ? '' : 's'}
-                              </span>
+                            <div className="min-w-0">
+                              <p className="font-bold text-gray-900 text-sm truncate">{series.label}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[11px] text-gray-500 font-mono">
+                                  Slug: {series.id}
+                                </span>
+                                <span className="text-[11px] font-bold text-primary">
+                                  • {count} Product{count === 1 ? '' : 's'}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleEditAnimeSeries(series)}
+                              className="p-2 bg-white border border-gray-300 hover:border-primary text-primary rounded-lg shadow-sm"
+                              title="Change Thumbnail / Edit"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
                                 setSelectedAnimeFilter(series.id);
                                 setActiveTab('products');
                               }}
-                              className="px-2.5 py-1.5 bg-white border border-gray-300 hover:border-primary text-primary rounded-lg text-xs font-bold shadow-sm"
+                              className="px-2.5 py-1.5 bg-white border border-gray-300 hover:border-gray-500 text-gray-700 rounded-lg text-xs font-bold shadow-sm"
                             >
                               Filter
                             </button>
@@ -2799,6 +2912,7 @@ export const Admin: React.FC = () => {
                     <table className="w-full text-left text-sm text-gray-600">
                       <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400 border-b border-gray-200">
                         <tr>
+                          <th className="px-6 py-4">Thumbnail</th>
                           <th className="px-6 py-4">Anime Universe</th>
                           <th className="px-6 py-4">Acronym / Code</th>
                           <th className="px-6 py-4">Slug / Filter ID</th>
@@ -2820,12 +2934,25 @@ export const Admin: React.FC = () => {
                             );
                           }).length;
                           const isCustom = customAnimeList.some((c) => c.id === series.id);
+                          const thumbUrl = animeThumbnails[series.id] || series.image_url || '/placeholder.jpg';
 
                           return (
-                            <tr key={series.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-3 font-bold text-gray-900 flex items-center space-x-2">
-                                <span className="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
-                                <span>{series.label}</span>
+                            <tr key={series.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-3">
+                                <div className="relative w-12 h-12">
+                                  <img
+                                    src={thumbUrl}
+                                    alt={series.label}
+                                    className="w-12 h-12 object-cover rounded-xl bg-gray-100 border border-gray-200 shadow-xs"
+                                    onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-6 py-3 font-bold text-gray-900">
+                                <div className="flex items-center space-x-2">
+                                  <span className="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
+                                  <span>{series.label}</span>
+                                </div>
                               </td>
                               <td className="px-6 py-3">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-red-600 text-white font-mono text-xs font-black tracking-wider">
@@ -2854,11 +2981,20 @@ export const Admin: React.FC = () => {
                               <td className="px-6 py-3 text-right space-x-2">
                                 <button
                                   type="button"
+                                  onClick={() => handleEditAnimeSeries(series)}
+                                  className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 hover:border-primary text-primary hover:bg-red-50 rounded-lg text-xs font-bold shadow-xs transition-colors"
+                                  title="Change Thumbnail & Edit Details"
+                                >
+                                  <Edit className="h-3.5 w-3.5 mr-1" />
+                                  Change Thumbnail
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => {
                                     setSelectedAnimeFilter(series.id);
                                     setActiveTab('products');
                                   }}
-                                  className="px-3 py-1 bg-white border border-gray-300 hover:border-primary text-primary rounded-lg text-xs font-bold shadow-sm"
+                                  className="px-3 py-1.5 bg-white border border-gray-300 hover:border-gray-500 text-gray-700 rounded-lg text-xs font-bold shadow-xs"
                                 >
                                   View Products
                                 </button>
@@ -5498,10 +5634,13 @@ export const Admin: React.FC = () => {
 
       {/* ANIME SUB-CATEGORY / UNIVERSE MODAL */}
       {isAnimeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-900/60 backdrop-blur-sm">
-          <div className="relative w-full max-w-md bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-2xl my-8">
             <button
-              onClick={() => setIsAnimeModalOpen(false)}
+              onClick={() => {
+                setIsAnimeModalOpen(false);
+                setEditingAnimeSeries(null);
+              }}
               className="absolute top-4 right-4 p-2 bg-gray-100 text-gray-500 hover:text-gray-900 rounded-full border border-gray-300 focus:outline-none"
             >
               <X className="h-4 w-4" />
@@ -5512,14 +5651,51 @@ export const Admin: React.FC = () => {
                 <Tag className="h-5 w-5" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">
-                Add Anime Franchise / Universe
+                {editingAnimeSeries
+                  ? `Change Thumbnail / Edit "${editingAnimeSeries.label}"`
+                  : 'Add Anime Franchise / Universe'}
               </h3>
             </div>
             <p className="text-xs text-gray-500 mb-5">
-              Create a new anime universe tag (e.g. Solo Leveling, Bleach, Chainsaw Man) for organizing products, filtering in the admin panel, and storefront pills.
+              {editingAnimeSeries
+                ? 'Upload or change the thumbnail image, name, and acronym for this sub-category. Thumbnails immediately update on the storefront, home page cards, and filter chips.'
+                : 'Create a new anime universe tag and thumbnail (e.g. Solo Leveling, Bleach, Chainsaw Man) for storefront filtering, product tagging, and home page cards.'}
             </p>
 
-            <form onSubmit={handleAddAnimeSeries} className="space-y-4">
+            <form onSubmit={handleSaveAnimeSeries} className="space-y-4">
+              <ImageUploadZone
+                mode="single"
+                label="Sub-Category Thumbnail Image"
+                description="Upload an anime banner or thumbnail image to 'product-images/subcategories'."
+                value={animeForm.image_url}
+                onChange={(url) => setAnimeForm({ ...animeForm, image_url: url })}
+                bucket="product-images"
+                folder="subcategories"
+              />
+
+              <Input
+                label="Or Direct Image URL"
+                type="url"
+                placeholder="https://images.unsplash.com/... or https://..."
+                value={animeForm.image_url}
+                onChange={(e) => setAnimeForm({ ...animeForm, image_url: e.target.value })}
+              />
+
+              {animeForm.image_url && (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <img
+                    src={animeForm.image_url}
+                    alt="Thumbnail preview"
+                    className="w-14 h-14 object-cover rounded-xl border border-gray-300 flex-shrink-0"
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-900">Live Thumbnail Preview</p>
+                    <p className="text-[11px] text-gray-500 truncate max-w-xs">{animeForm.image_url}</p>
+                  </div>
+                </div>
+              )}
+
               <Input
                 label="Anime Franchise Name"
                 type="text"
@@ -5540,17 +5716,35 @@ export const Admin: React.FC = () => {
               <Input
                 label="Unique Slug / Tag ID (Optional)"
                 type="text"
+                disabled={Boolean(editingAnimeSeries)}
                 placeholder="e.g. jjk, berserk (auto-generated if empty)"
                 value={animeForm.id}
                 onChange={(e) => setAnimeForm({ ...animeForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
               />
+              {editingAnimeSeries && (
+                <p className="text-[10px] text-gray-400 -mt-2">
+                  * Unique slug cannot be changed when editing to preserve product associations.
+                </p>
+              )}
 
               <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 justify-end pt-3">
-                <Button variant="outline" type="button" onClick={() => setIsAnimeModalOpen(false)} className="w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    setIsAnimeModalOpen(false);
+                    setEditingAnimeSeries(null);
+                  }}
+                  className="w-full sm:w-auto"
+                >
                   Cancel
                 </Button>
-                <Button type="submit" className="w-full sm:w-auto">
-                  Save Anime Universe
+                <Button
+                  type="submit"
+                  disabled={savingAnime}
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold"
+                >
+                  {savingAnime ? 'Saving...' : editingAnimeSeries ? 'Save Changes' : 'Save Anime Universe'}
                 </Button>
               </div>
             </form>
