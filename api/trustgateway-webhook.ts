@@ -79,9 +79,7 @@ export default async function handler(req: Request) {
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
 
-    // ─── Payment confirmed — log for now ───
-    // In production, look up event.order_id in your DB, verify amount matches,
-    // and fulfill the order exactly once (idempotent).
+    // ─── Payment confirmed — log & sync to database ───
     console.log('[TrustGateway Webhook] Payment confirmed:', {
       order_id: event.order_id,
       amount: event.amount,
@@ -89,8 +87,28 @@ export default async function handler(req: Request) {
       transaction_id: event.transaction_id,
     });
 
-    // TODO: Update Supabase order status to 'PAID' here if not already done
-    // via the client-side polling path.
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey && event.order_id) {
+        // Try updating order by id
+        await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${encodeURIComponent(event.order_id)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            status: 'PAID',
+            payment_status: 'PAID'
+          })
+        });
+      }
+    } catch (dbErr) {
+      console.warn('[TrustGateway Webhook] Supabase sync error:', dbErr);
+    }
 
     return new Response('OK', { status: 200, headers: corsHeaders });
   } catch (error: any) {

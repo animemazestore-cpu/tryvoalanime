@@ -577,50 +577,150 @@ export const Admin: React.FC = () => {
       try {
         let dbOrdersList: any[] = [];
         try {
-          const { data: dbOrders } = await supabase.from('orders').select(`
-            *,
-            payment_proof:payment_proof (screenshot_url),
-            items:order_items (
-              *,
-              product:products (*)
-            )
-          `).order('created_at', { ascending: false });
-          if (dbOrders) dbOrdersList = dbOrders;
+          // 1. Resilient base orders fetch (cannot fail from missing foreign key relationships or schema cache mismatch)
+          const { data: dbOrders, error: ordersErr } = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (ordersErr) {
+            console.warn('Supabase fetch base orders error:', ordersErr);
+          } else if (dbOrders && dbOrders.length > 0) {
+            const orderIds = dbOrders.map((o: any) => o.id);
+
+            // Safely fetch order_items in a separate query so a missing table/column won't break orders
+            const itemsByOrderId: Record<string, any[]> = {};
+            try {
+              const { data: dbItems, error: itemsErr } = await supabase
+                .from('order_items')
+                .select('*, product:products(*)')
+                .in('order_id', orderIds);
+
+              if (!itemsErr && dbItems) {
+                for (const it of dbItems) {
+                  if (!itemsByOrderId[it.order_id]) itemsByOrderId[it.order_id] = [];
+                  itemsByOrderId[it.order_id].push(it);
+                }
+              }
+            } catch (itErr) {
+              console.warn('Safe order_items query warning:', itErr);
+            }
+
+            // Safely fetch payment proofs without crashing if table/relation differs
+            const proofsByOrderId: Record<string, any> = {};
+            try {
+              const { data: dbProofs } = await supabase
+                .from('payment_proofs')
+                .select('*')
+                .in('order_id', orderIds);
+              if (dbProofs) {
+                for (const p of dbProofs) {
+                  proofsByOrderId[p.order_id] = p;
+                }
+              }
+            } catch (_) {
+              try {
+                const { data: dbProofsSingular } = await supabase
+                  .from('payment_proof')
+                  .select('*')
+                  .in('order_id', orderIds);
+                if (dbProofsSingular) {
+                  for (const p of dbProofsSingular) {
+                    proofsByOrderId[p.order_id] = p;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // Map and enrich orders, pulling embedded items from shipping_address if order_items was empty
+            dbOrdersList = dbOrders.map((order: any) => {
+              const separateItems = itemsByOrderId[order.id] || [];
+              const rawAddr = order.shipping_address || {};
+              const embeddedItems = rawAddr.items || rawAddr.cart_items || [];
+              const itemVariants = rawAddr.item_variants || [];
+
+              const resolvedItems = separateItems.length > 0
+                ? separateItems.map((item: any) => {
+                    const matchedVariant = itemVariants.find((iv: any) => iv.product_id === item.product_id);
+                    return {
+                      ...item,
+                      selected_variant: item.selected_variant || matchedVariant?.selected_variant || null,
+                      product: item.product || {
+                        name: item.product_name || 'Anime Apparel Item',
+                        main_image_url: item.image_url || '/placeholder.jpg',
+                        price: item.price || 0,
+                        sku: item.sku || null,
+                      }
+                    };
+                  })
+                : embeddedItems.map((emb: any, idx: number) => ({
+                    id: emb.id || `emb-${order.id}-${idx}`,
+                    order_id: order.id,
+                    product_id: emb.product_id || emb.product?.id,
+                    product_name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
+                    quantity: emb.quantity || 1,
+                    price: emb.price || emb.variantPrice || emb.product?.price || 0,
+                    selected_variant: emb.selected_variant || emb.selectedVariant || null,
+                    selected_variant_id: emb.selected_variant_id || emb.selectedVariantId || null,
+                    selected_attributes: emb.selected_attributes || emb.selectedAttributes || {},
+                    image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
+                    product: emb.product || {
+                      id: emb.product_id,
+                      name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
+                      main_image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
+                      price: emb.price || 0,
+                      sku: emb.sku || null,
+                    }
+                  }));
+
+              const proof = proofsByOrderId[order.id] || (Array.isArray(order.payment_proof) ? order.payment_proof[0] : order.payment_proof) || null;
+
+              return {
+                ...order,
+                payment_proof: proof,
+                items: resolvedItems
+              };
+            });
+          }
         } catch (dbErr) {
           console.warn('Could not fetch DB orders:', dbErr);
         }
 
-        // Map the selected variant from shipping_address JSON and convert payment proof array to object
-        const ordersWithVariantsMapped = dbOrdersList.map((order: any) => {
-          const itemVariants = order.shipping_address?.item_variants || [];
-          const proof = Array.isArray(order.payment_proof)
-            ? order.payment_proof[0]
-            : order.payment_proof;
-          return {
-            ...order,
-            payment_proof: proof || null,
-            items: order.items?.map((item: any) => {
-              const matchedVariant = itemVariants.find((iv: any) => iv.product_id === item.product_id);
-              return {
-                ...item,
-                selected_variant: item.selected_variant || matchedVariant?.selected_variant || null
-              };
-            })
-          };
+        // Read local offline/resilience orders across all known storage keys
+        const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
+        const localOrdersMap = new Map<string, any>();
+        for (const k of localOrderKeys) {
+          try {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                for (const lo of parsed) {
+                  if (lo && lo.id && !localOrdersMap.has(lo.id)) {
+                    localOrdersMap.set(lo.id, lo);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn(`Error reading local orders from ${k}:`, e);
+          }
+        }
+        const localOrders = Array.from(localOrdersMap.values());
+
+        const existingDbIds = new Set(dbOrdersList.map((o: any) => o.id));
+
+        // If DB order has missing items, see if local storage order has them
+        const enrichedDbOrders = dbOrdersList.map((dbO: any) => {
+          if (!dbO.items || dbO.items.length === 0) {
+            const localMatch = localOrdersMap.get(dbO.id);
+            if (localMatch?.items && localMatch.items.length > 0) {
+              return { ...dbO, items: localMatch.items };
+            }
+          }
+          return dbO;
         });
 
-        // Read local offline/resilience orders from localStorage
-        let localOrders: any[] = [];
-        try {
-          const raw = localStorage.getItem('elitebath_local_orders') || localStorage.getItem('animemaze_local_orders');
-          if (raw) {
-            localOrders = JSON.parse(raw);
-          }
-        } catch (e) {
-          console.warn('Error reading local orders:', e);
-        }
-
-        const existingDbIds = new Set(ordersWithVariantsMapped.map((o: any) => o.id));
         const normalizedLocalOrders = localOrders
           .filter((lo: any) => !existingDbIds.has(lo.id))
           .map((lo: any) => ({
@@ -628,15 +728,15 @@ export const Admin: React.FC = () => {
             items: (lo.items || []).map((it: any) => ({
               ...it,
               product: it.product || {
-                name: it.product_name || 'Apparel Item',
+                name: it.product_name || 'Anime Apparel Item',
                 main_image_url: it.image_url || '/placeholder.jpg',
-                sku: it.sku || (it.selected_variant_id ? `EBC-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
+                sku: it.sku || (it.selected_variant_id ? `TYV-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
                 price: it.price || 0
               }
             }))
           }));
 
-        const mergedOrders = [...ordersWithVariantsMapped, ...normalizedLocalOrders].sort((a: any, b: any) => {
+        const mergedOrders = [...enrichedDbOrders, ...normalizedLocalOrders].sort((a: any, b: any) => {
           const timeA = new Date(a.created_at || 0).getTime();
           const timeB = new Date(b.created_at || 0).getTime();
           return timeB - timeA;
@@ -646,25 +746,33 @@ export const Admin: React.FC = () => {
       } catch (err) {
         console.error('Error loading orders:', err);
         try {
-          const raw = localStorage.getItem('elitebath_local_orders') || localStorage.getItem('animemaze_local_orders');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            const normalized = parsed.map((lo: any) => ({
-              ...lo,
-              items: (lo.items || []).map((it: any) => ({
-                ...it,
-                product: it.product || {
-                  name: it.product_name || 'Apparel Item',
-                  main_image_url: it.image_url || '/placeholder.jpg',
-                  sku: it.sku || null,
-                  price: it.price || 0
+          const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
+          const localOrdersMap = new Map<string, any>();
+          for (const k of localOrderKeys) {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                for (const lo of parsed) {
+                  if (lo && lo.id && !localOrdersMap.has(lo.id)) localOrdersMap.set(lo.id, lo);
                 }
-              }))
-            }));
-            setOrders(normalized as Order[]);
-          } else {
-            setOrders([]);
+              }
+            }
           }
+          const allLocal = Array.from(localOrdersMap.values());
+          const normalized = allLocal.map((lo: any) => ({
+            ...lo,
+            items: (lo.items || []).map((it: any) => ({
+              ...it,
+              product: it.product || {
+                name: it.product_name || 'Anime Apparel Item',
+                main_image_url: it.image_url || '/placeholder.jpg',
+                sku: it.sku || null,
+                price: it.price || 0
+              }
+            }))
+          }));
+          setOrders(normalized as Order[]);
         } catch {
           setOrders([]);
         }
@@ -757,6 +865,26 @@ export const Admin: React.FC = () => {
     const interval = setInterval(loadReplacementsData, 3000);
     return () => clearInterval(interval);
   }, [activeTab, loadReplacementsData]);
+
+  // Auto-refresh orders on storage event and periodic check on orders/verification tab
+  useEffect(() => {
+    const handleStorageChange = () => {
+      loadAdminData();
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (activeTab === 'orders' || activeTab === 'verification') {
+      interval = setInterval(() => {
+        loadAdminData();
+      }, 8000);
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab]);
 
 
   // --- CRUD: Products ---
@@ -1995,20 +2123,19 @@ export const Admin: React.FC = () => {
 
               <div className="p-3.5 sm:p-4 bg-primary/10 border border-primary/20 rounded-xl">
                 <p className="text-xs sm:text-sm text-gray-700">
-                  <strong className="text-primary">Note:</strong> Payments are processed securely via Razorpay (automated signature verification) and Direct UPI QR (UTR/transaction proof verification).
+                  <strong className="text-primary">Note:</strong> Payments are processed securely via Trust Gateway UPI and Direct UPI QR. All orders across all channels appear here in real-time.
                 </p>
               </div>
 
               {/* Mobile Verification Cards */}
               <div className="sm:hidden space-y-3">
-                {orders.filter(o => ['PENDING_PAYMENT', 'PAID', 'CANCELLED'].includes(o.status)).length === 0 ? (
+                {orders.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 italic bg-gray-50 rounded-xl border border-gray-200 text-xs">
                     No recent orders found.
                   </div>
                 ) : (
                   orders
-                    .filter(o => ['PENDING_PAYMENT', 'PAID', 'CANCELLED'].includes(o.status))
-                    .slice(0, 15)
+                    .slice(0, 30)
                     .map((order) => (
                       <div key={order.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-2.5">
                         <div className="flex items-center justify-between">
@@ -2031,7 +2158,7 @@ export const Admin: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-200">
-                          {order.status === 'PENDING_PAYMENT' && (
+                          {(order.status === 'PENDING_PAYMENT' || order.status === 'PENDING_VERIFICATION') && (
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-warning/10 border border-warning/20 text-warning rounded-lg text-[11px] font-semibold">
                               <span>⏳ Pending Payment</span>
                             </span>
@@ -2040,6 +2167,22 @@ export const Admin: React.FC = () => {
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-success/10 border border-success/20 text-success rounded-lg text-[11px] font-semibold">
                               <Check className="h-3 w-3" />
                               <span>Paid</span>
+                            </span>
+                          )}
+                          {order.status === 'PROCESSING' && (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-[11px] font-semibold">
+                              <span>⚙️ Processing</span>
+                            </span>
+                          )}
+                          {(order.status === 'SHIPPED' || order.status === 'OUT_FOR_DELIVERY') && (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-[11px] font-semibold">
+                              <span>🚚 Shipped</span>
+                            </span>
+                          )}
+                          {order.status === 'DELIVERED' && (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[11px] font-semibold">
+                              <Check className="h-3 w-3" />
+                              <span>Delivered</span>
                             </span>
                           )}
                           {order.status === 'CANCELLED' && (
@@ -2070,7 +2213,7 @@ export const Admin: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {orders.filter(o => ['PENDING_PAYMENT', 'PAID', 'CANCELLED'].includes(o.status)).length === 0 ? (
+                    {orders.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">
                           No recent orders found.
@@ -2078,8 +2221,7 @@ export const Admin: React.FC = () => {
                       </tr>
                     ) : (
                       orders
-                        .filter(o => ['PENDING_PAYMENT', 'PAID', 'CANCELLED'].includes(o.status))
-                        .slice(0, 15)
+                        .slice(0, 30)
                         .map((order) => (
                           <tr key={order.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 font-bold text-xs truncate max-w-[120px]">{order.id}</td>
@@ -2093,7 +2235,7 @@ export const Admin: React.FC = () => {
                             </td>
                             <td className="px-6 py-4 font-extrabold text-gray-900">₹{order.total_amount}</td>
                             <td className="px-6 py-4 text-center">
-                              {order.status === 'PENDING_PAYMENT' && (
+                              {(order.status === 'PENDING_PAYMENT' || order.status === 'PENDING_VERIFICATION') && (
                                 <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-warning/10 border border-warning/20 text-warning rounded-lg text-xs font-semibold">
                                   <span>⏳ Pending Payment</span>
                                 </span>
@@ -2104,6 +2246,22 @@ export const Admin: React.FC = () => {
                                   <span>Paid</span>
                                 </span>
                               )}
+                              {order.status === 'PROCESSING' && (
+                                <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold">
+                                  <span>⚙️ Processing</span>
+                                </span>
+                              )}
+                              {(order.status === 'SHIPPED' || order.status === 'OUT_FOR_DELIVERY') && (
+                                <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold">
+                                  <span>🚚 Shipped</span>
+                                </span>
+                              )}
+                              {order.status === 'DELIVERED' && (
+                                <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs font-semibold">
+                                  <Check className="h-3.5 w-3.5" />
+                                  <span>Delivered</span>
+                                </span>
+                              )}
                               {order.status === 'CANCELLED' && (
                                 <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-danger/10 border border-danger/20 text-danger rounded-lg text-xs font-semibold">
                                   <X className="h-3.5 w-3.5" />
@@ -2112,7 +2270,7 @@ export const Admin: React.FC = () => {
                               )}
                             </td>
                             <td className="px-6 py-4 text-center">
-                              {order.payment_status === 'PENDING_PAYMENT' && (
+                              {(order.payment_status === 'PENDING_PAYMENT' || order.payment_status === 'PENDING_VERIFICATION' || !order.payment_status) && (
                                 <span className="text-xs text-warning font-medium">Awaiting Payment</span>
                               )}
                               {order.payment_status === 'PAID' && (

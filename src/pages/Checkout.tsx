@@ -26,7 +26,7 @@ import {
   getCheckoutUrl,
 } from '../lib/trustgateway';
 import { checkRateLimit, recordRateLimitAttempt } from '../lib/rateLimiter';
-import { dispatchOrderToQikink, getQikinkConfig } from '../lib/qikink';
+import { dispatchOrderToQikink } from '../lib/qikink';
 
 export const Checkout: React.FC = () => {
   const navigate = useNavigate();
@@ -100,7 +100,12 @@ export const Checkout: React.FC = () => {
   const [tgCheckoutUrl, setTgCheckoutUrl] = useState<string | null>(null);
   const [tgQrUrl, setTgQrUrl] = useState<string | null>(null);
   const [pollingActive, setPollingActive] = useState(false);
+  const [dbOrderId, setDbOrderId] = useState<string | null>(null);
+  const [showManualConfirm, setShowManualConfirm] = useState(false);
+  const [manualUtr, setManualUtr] = useState('');
+  const [verifyingNow, setVerifyingNow] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dbOrderIdRef = useRef<string | null>(null);
 
   // Enforce mandatory authentication: user must be logged in to checkout
   useEffect(() => {
@@ -133,170 +138,214 @@ export const Checkout: React.FC = () => {
     }
   }, [paymentStatus, clearCart]);
 
-  // Save Confirmed Order to DB and Local Storage
-  const persistConfirmedOrder = async (
+  // Helper to build shipping address object with full embedded items
+  const buildShippingAddressJson = (orderId: string, paymentId?: string, paymentMethod?: string) => ({
+    fullName,
+    phone,
+    email,
+    address,
+    landmark,
+    city,
+    state,
+    pincode,
+    country,
+    paymentMethod: paymentMethod || 'TrustGateway UPI',
+    paymentId: paymentId || '',
+    order_ref: orderId,
+    item_variants: items.map((item) => ({
+      product_id: item.product.id,
+      selected_variant: item.selectedVariant || null,
+      selected_variant_id: item.selectedVariantId || null,
+      selected_attributes: item.selectedAttributes || {},
+    })),
+    items: items.map((item, idx) => ({
+      id: `item-${orderId}-${idx}`,
+      product_id: item.product.id,
+      product_name: item.product.name,
+      quantity: item.quantity,
+      price: item.variantPrice ?? item.product.price,
+      selected_variant: item.selectedVariant || null,
+      selected_variant_id: item.selectedVariantId || null,
+      selected_attributes: item.selectedAttributes || {},
+      image_url: item.variantImage || item.product.main_image_url,
+      sku: item.selectedVariantId ? `TYV-${item.selectedVariantId.slice(0, 8).toUpperCase()}` : null,
+      product: {
+        id: item.product.id,
+        name: item.product.name,
+        main_image_url: item.variantImage || item.product.main_image_url,
+        price: item.variantPrice ?? item.product.price,
+        slug: item.product.slug,
+      },
+    })),
+  });
+
+  // Save or update order in both Supabase and all localStorage keys
+  const recordOrder = async (
     orderId: string,
+    existingDbId: string | null,
+    orderStatus: string,
+    paymentStatusVal: string,
     paymentId: string,
     paymentMethodUsed: string
-  ) => {
-    const shippingAddressJson = {
-      fullName,
-      phone,
-      email,
-      address,
-      landmark,
-      city,
-      state,
-      pincode,
-      country,
-      paymentMethod: paymentMethodUsed,
-      paymentId,
-      order_ref: orderId,
-      item_variants: items.map((item) => ({
-        product_id: item.product.id,
-        selected_variant: item.selectedVariant || null,
-        selected_variant_id: item.selectedVariantId || null,
-        selected_attributes: item.selectedAttributes || {},
-      })),
-    };
-
+  ): Promise<string | null> => {
+    const shippingJson = buildShippingAddressJson(orderId, paymentId, paymentMethodUsed);
     const estDelivery = new Date();
     estDelivery.setDate(estDelivery.getDate() + 5);
 
-    // 1. Persist order in Supabase
+    let recordedDbId = existingDbId;
+
+    // 1. Persist to Supabase
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId);
-      const { data: insertedOrder, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          ...(isUuid ? { id: orderId } : {}),
+      if (existingDbId) {
+        // Update existing row
+        const { error: updErr } = await supabase
+          .from('orders')
+          .update({
+            status: orderStatus,
+            payment_status: paymentStatusVal,
+            shipping_address: shippingJson,
+          })
+          .eq('id', existingDbId);
+        if (updErr) console.warn('Supabase order update warning:', updErr);
+      } else {
+        // Insert new row
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId);
+        const insertPayload: any = {
           user_id: user?.id || null,
           total_amount: total,
-          status: 'PAID',
-          payment_status: 'PAID',
-          shipping_address: shippingAddressJson,
+          status: orderStatus,
+          payment_status: paymentStatusVal,
+          shipping_address: shippingJson,
           estimated_delivery_date: estDelivery.toISOString(),
-        })
-        .select()
-        .maybeSingle();
+        };
+        if (isUuid) insertPayload.id = orderId;
 
-      if (orderError) {
-        console.warn('Supabase DB order insert error:', orderError);
-      } else if (insertedOrder?.id) {
-        const orderItemsPayload = items.map((item) => ({
-          order_id: insertedOrder.id,
-          product_id: item.product.id,
-          quantity: item.quantity,
-          price: item.variantPrice ?? item.product.price,
-          selected_variant: item.selectedVariant || null,
-          selected_variant_id: item.selectedVariantId || null,
-          selected_attributes: item.selectedAttributes || {},
-        }));
-        await supabase.from('order_items').insert(orderItemsPayload);
+        let { data: insertedOrder, error: orderError } = await supabase
+          .from('orders')
+          .insert(insertPayload)
+          .select()
+          .maybeSingle();
+
+        // If insert failed due to estimated_delivery_date column missing, retry without it
+        if (orderError && (orderError.message?.includes('estimated_delivery_date') || orderError.code === '42703')) {
+          delete insertPayload.estimated_delivery_date;
+          const retryRes = await supabase
+            .from('orders')
+            .insert(insertPayload)
+            .select()
+            .maybeSingle();
+          insertedOrder = retryRes.data;
+          orderError = retryRes.error;
+        }
+
+        // If insert failed due to status check constraint (e.g. only PENDING_VERIFICATION allowed)
+        if (orderError && orderError.message?.includes('check constraint')) {
+          insertPayload.status = 'PENDING_VERIFICATION';
+          insertPayload.payment_status = 'PENDING_VERIFICATION';
+          const retryCheck = await supabase
+            .from('orders')
+            .insert(insertPayload)
+            .select()
+            .maybeSingle();
+          insertedOrder = retryCheck.data;
+        }
+
+        if (insertedOrder?.id) {
+          recordedDbId = insertedOrder.id;
+          dbOrderIdRef.current = insertedOrder.id;
+          setDbOrderId(insertedOrder.id);
+
+          // Try inserting into order_items safely
+          try {
+            const orderItemsPayload = items.map((item) => ({
+              order_id: insertedOrder.id,
+              product_id: item.product.id,
+              quantity: item.quantity,
+              price: item.variantPrice ?? item.product.price,
+            }));
+            await supabase.from('order_items').insert(orderItemsPayload);
+          } catch (itemsErr) {
+            console.warn('Non-fatal order_items insert error:', itemsErr);
+          }
+        }
       }
     } catch (dbErr) {
-      console.warn('Supabase DB order insert exception, storing locally:', dbErr);
+      console.warn('Supabase recordOrder exception:', dbErr);
     }
 
-    // 3. Persist order in localStorage for 100% reliable local access
+    // 2. Persist to all localStorage keys for 100% reliable local/offline access
     try {
-      const localOrder = {
-        id: orderId,
+      const localOrderObj = {
+        id: recordedDbId || orderId,
+        order_ref: orderId,
         user_id: user?.id || 'guest',
         total_amount: total,
-        status: 'PAID',
-        payment_status: 'PAID',
+        status: orderStatus,
+        payment_status: paymentStatusVal,
         payment_id: paymentId,
-        shipping_address: shippingAddressJson,
+        shipping_address: shippingJson,
         estimated_delivery_date: estDelivery.toISOString(),
-        items: items.map((item, idx) => ({
-          id: `item-${Date.now()}-${idx}`,
-          product_id: item.product.id,
-          product_name: item.product.name,
-          quantity: item.quantity,
-          price: item.variantPrice ?? item.product.price,
-          selected_variant: item.selectedVariant || null,
-          selected_variant_id: item.selectedVariantId || null,
-          selected_attributes: item.selectedAttributes || {},
-          image_url: item.variantImage || item.product.main_image_url,
-          product: {
-            id: item.product.id,
-            name: item.product.name,
-            main_image_url: item.variantImage || item.product.main_image_url,
-            price: item.variantPrice ?? item.product.price,
-            slug: item.product.slug,
-          },
-        })),
+        items: shippingJson.items,
         created_at: new Date().toISOString(),
       };
 
-      const existingOrders = JSON.parse(
-        localStorage.getItem('elitebath_local_orders') ||
-          localStorage.getItem('animemaze_local_orders') ||
-          '[]'
-      );
-      existingOrders.unshift(localOrder);
-      localStorage.setItem('elitebath_local_orders', JSON.stringify(existingOrders));
-      localStorage.setItem('animemaze_local_orders', JSON.stringify(existingOrders));
-
-      // 4. Automated Qikink POD fulfillment dispatch
-      try {
-        void dispatchOrderToQikink(localOrder as any).then(async (qRes) => {
-          if (qRes && qRes.success) {
-            console.info('[Qikink Auto-Fulfillment Successful]:', qRes);
-            const qikinkInfo = {
-              order_id: qRes.qikink_order_id || `QK-${Date.now()}`,
-              status: qRes.status || 'QUEUED',
-              awb_number: qRes.awb_number,
-              courier_name: qRes.courier_name,
-              tracking_url: qRes.tracking_url,
-              dispatched_at: new Date().toISOString(),
-              environment: getQikinkConfig().environment,
-            };
-            const trackingInfo = qRes.awb_number
-              ? {
-                  carrier: qRes.courier_name || 'Delhivery Express',
-                  tracking_number: qRes.awb_number,
-                  shipped_at: new Date().toISOString(),
-                }
-              : undefined;
-
-            try {
-              const currentOrders = JSON.parse(localStorage.getItem('elitebath_local_orders') || '[]');
-              const updated = currentOrders.map((o: any) =>
-                o.id === orderId
-                  ? {
-                      ...o,
-                      status: 'PROCESSING',
-                      shipping_address: {
-                        ...(o.shipping_address || {}),
-                        qikink_info: qikinkInfo,
-                        ...(trackingInfo ? { tracking_info: trackingInfo } : {}),
-                      },
-                    }
-                  : o
-              );
-              localStorage.setItem('elitebath_local_orders', JSON.stringify(updated));
-            } catch (_) {}
-
-            try {
-              await supabase.from('orders').update({
-                status: 'PROCESSING',
-                shipping_address: {
-                  ...shippingAddressJson,
-                  qikink_info: qikinkInfo,
-                  ...(trackingInfo ? { tracking_info: trackingInfo } : {})
-                }
-              }).eq('id', orderId);
-            } catch (_) {}
-          }
-        });
-      } catch (podErr) {
-        console.warn('Qikink automated fulfillment background dispatch error:', podErr);
+      const keys = ['tryvoal_local_orders', 'elitebath_local_orders', 'animemaze_local_orders'];
+      for (const k of keys) {
+        try {
+          const current = JSON.parse(localStorage.getItem(k) || '[]');
+          const filtered = current.filter((o: any) => o.id !== localOrderObj.id && o.order_ref !== orderId);
+          filtered.unshift(localOrderObj);
+          localStorage.setItem(k, JSON.stringify(filtered));
+        } catch (_) {}
       }
-    } catch (e) {
-      console.error('Failed to write to local orders:', e);
+
+      // Notify any other open tabs (e.g. Admin panel)
+      window.dispatchEvent(new Event('storage'));
+    } catch (localErr) {
+      console.warn('LocalStorage save error:', localErr);
     }
+
+    return recordedDbId;
+  };
+
+  // Confirm payment and transition to Step 4
+  const confirmPaymentSuccess = async (paymentId: string) => {
+    const currentOrderId = orderCreatedId || `ord-${Date.now()}`;
+    const targetDbId = dbOrderId || dbOrderIdRef.current;
+
+    const finalDbId = await recordOrder(
+      currentOrderId,
+      targetDbId,
+      'PAID',
+      'PAID',
+      paymentId,
+      'TrustGateway UPI'
+    );
+    if (finalDbId) {
+      setDbOrderId(finalDbId);
+      dbOrderIdRef.current = finalDbId;
+    }
+
+    // Automated Qikink POD fulfillment dispatch
+    try {
+      const shippingJson = buildShippingAddressJson(currentOrderId, paymentId, 'TrustGateway UPI');
+      const orderForQikink = {
+        id: finalDbId || currentOrderId,
+        user_id: user?.id || 'guest',
+        total_amount: total,
+        status: 'PAID',
+        shipping_address: shippingJson,
+        items: shippingJson.items,
+        created_at: new Date().toISOString(),
+      };
+      void dispatchOrderToQikink(orderForQikink as any);
+    } catch (podErr) {
+      console.warn('Qikink automated fulfillment background dispatch error:', podErr);
+    }
+
+    setCurrentStep(4);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setLoading(false);
   };
 
   // Step 2 Validation: Address & Customer Details
@@ -355,7 +404,7 @@ export const Checkout: React.FC = () => {
 
   // Poll TrustGateway for payment confirmation
   const startPolling = useCallback(
-    (gatewayOrderId: string, localOrderId: string) => {
+    (gatewayOrderId: string) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       setPollingActive(true);
 
@@ -372,19 +421,61 @@ export const Checkout: React.FC = () => {
             const paymentId = result.data.transaction_id || result.data.utr || gatewayOrderId;
             setOrderPaymentId(paymentId);
 
-            await persistConfirmedOrder(localOrderId, paymentId, 'TrustGateway UPI');
-            setCurrentStep(4);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            setLoading(false);
+            await confirmPaymentSuccess(paymentId);
           }
         } catch (err) {
           console.warn('[TrustGateway] Poll error (will retry):', err);
         }
-      }, 5000); // Poll every 5 seconds
+      }, 4000); // Poll every 4 seconds
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, fullName, phone, email, address, landmark, city, state, pincode, country, user, total]
+    [items, fullName, phone, email, address, landmark, city, state, pincode, country, user, total, orderCreatedId, dbOrderId]
   );
+
+  // Manual Instant Status Check
+  const handleCheckStatusNow = async () => {
+    if (!tgOrderId) return;
+    setVerifyingNow(true);
+    setErrorMsg('');
+    try {
+      const result = await checkTrustGatewayStatus(tgOrderId);
+      if (result.paid === true && result.data?.order_id === tgOrderId) {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        setPollingActive(false);
+        setPaymentStatus('paid');
+
+        const paymentId = result.data.transaction_id || result.data.utr || tgOrderId;
+        setOrderPaymentId(paymentId);
+
+        await confirmPaymentSuccess(paymentId);
+      } else {
+        setErrorMsg('Payment not yet marked as completed by gateway. If you already completed the payment in UPI app, click "I have completed payment" below.');
+      }
+    } catch (err: any) {
+      setErrorMsg('Status check: ' + (err.message || 'Please retry in a moment.'));
+    } finally {
+      setVerifyingNow(false);
+    }
+  };
+
+  // Manual Confirmation (Customer completed payment in PhonePe/GPay/Paytm)
+  const handleManualConfirm = async () => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      setPollingActive(false);
+      setPaymentStatus('paid');
+
+      const paymentId = manualUtr.trim() || tgOrderId || `UPI-${Date.now()}`;
+      setOrderPaymentId(paymentId);
+
+      await confirmPaymentSuccess(paymentId);
+    } catch (err: any) {
+      setErrorMsg('Confirmation error: ' + (err.message || 'Please try again.'));
+      setLoading(false);
+    }
+  };
 
   // Step 3 Execution: Handle TrustGateway UPI Checkout
   const handleTrustGatewayCheckout = async () => {
@@ -405,14 +496,29 @@ export const Checkout: React.FC = () => {
 
     try {
       // Generate local order reference
-      const localOrderId = `ord-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const localOrderId = orderCreatedId || `ord-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       setOrderCreatedId(localOrderId);
 
       const deliveryDate = new Date();
       deliveryDate.setDate(deliveryDate.getDate() + 5);
       setOrderDeliveryDate(deliveryDate.toISOString());
 
-      // Create TrustGateway order
+      // 1. Immediately create order in Supabase and local storage as PENDING_PAYMENT
+      // This guarantees the admin sees the order even if customer closes the payment tab or polling lags!
+      const createdDbId = await recordOrder(
+        localOrderId,
+        dbOrderId || dbOrderIdRef.current,
+        'PENDING_PAYMENT',
+        'PENDING_PAYMENT',
+        '',
+        'TrustGateway UPI'
+      );
+      if (createdDbId) {
+        setDbOrderId(createdDbId);
+        dbOrderIdRef.current = createdDbId;
+      }
+
+      // 2. Create TrustGateway order
       const tgResult = await createTrustGatewayOrder({
         amount: total.toFixed(2),
         note: `Tryvoal Order ${localOrderId}`,
@@ -431,7 +537,7 @@ export const Checkout: React.FC = () => {
       window.open(getCheckoutUrl(checkout_url), '_blank');
 
       // Start polling for payment confirmation
-      startPolling(order_id, localOrderId);
+      startPolling(order_id);
     } catch (err: any) {
       console.error('Checkout error:', err);
       setErrorMsg(err.message || 'Something went wrong during checkout.');
@@ -963,44 +1069,104 @@ export const Checkout: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Polling status — shown after checkout is initiated */}
+                {/* Polling status & Verification Options — shown after checkout is initiated */}
                 {pollingActive && tgCheckoutUrl && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <Loader2 className="h-5 w-5 text-amber-600 animate-spin" />
-                      <div>
-                        <p className="text-sm font-bold text-amber-800">
-                          Waiting for your payment...
-                        </p>
-                        <p className="text-xs text-amber-600">
-                          Complete the payment on the checkout page. This screen will update automatically.
-                        </p>
-                        {tgOrderId && (
-                          <p className="text-[10px] text-amber-700/70 font-mono mt-1">
-                            Gateway Order ID: {tgOrderId}
+                  <div className="p-4 sm:p-5 bg-amber-50/90 border border-amber-200 rounded-2xl space-y-4 shadow-sm animate-fadeIn">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <Loader2 className="h-5 w-5 text-amber-600 animate-spin mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold text-amber-900">
+                            Waiting for UPI Payment Confirmation...
                           </p>
-                        )}
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Complete the payment on the Trust Gateway checkout tab or via QR code.
+                          </p>
+                          {tgOrderId && (
+                            <p className="text-[10px] text-amber-800/80 font-mono mt-1">
+                              Gateway Reference: {tgOrderId}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <a
+                        href={tgCheckoutUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-xs font-bold transition-colors flex-shrink-0"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>Open Gateway</span>
+                      </a>
                     </div>
-                    <a
-                      href={tgCheckoutUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Re-open checkout page
-                    </a>
+
+                    {/* QR Code if present */}
                     {tgQrUrl && (
-                      <div className="pt-3 border-t border-amber-200">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
-                          Or scan QR code to pay
-                        </p>
+                      <div className="p-3 bg-white rounded-xl border border-amber-200 flex flex-col sm:flex-row items-center gap-4">
                         <img
                           src={tgQrUrl}
                           alt="UPI QR Code"
-                          className="w-40 h-40 rounded-lg border border-gray-200 bg-white p-1"
+                          className="w-32 h-32 rounded-lg border border-gray-200 bg-white p-1 flex-shrink-0"
                         />
+                        <div className="text-center sm:text-left space-y-1">
+                          <p className="text-xs font-bold text-gray-900">Scan & Pay via any UPI App</p>
+                          <p className="text-[11px] text-gray-500">Google Pay, PhonePe, Paytm, CRED, or BHIM</p>
+                          <p className="text-[11px] font-extrabold text-primary pt-1">Payable: ₹{total.toLocaleString('en-IN')}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Bar: Check Status Now & I Have Paid */}
+                    <div className="pt-2 border-t border-amber-200/80 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        loading={verifyingNow}
+                        onClick={handleCheckStatusNow}
+                        className="bg-white hover:bg-amber-50 text-amber-900 border-amber-300 text-xs py-2"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
+                        <span>Check Status Now</span>
+                      </Button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowManualConfirm(!showManualConfirm)}
+                        className="text-xs font-bold text-primary hover:underline px-2 py-1 ml-auto"
+                      >
+                        {showManualConfirm ? 'Hide Confirmation Form' : 'Paid in UPI App? Click here to confirm'}
+                      </button>
+                    </div>
+
+                    {/* Expandable Manual Confirmation Form */}
+                    {showManualConfirm && (
+                      <div className="p-3.5 bg-white rounded-xl border border-primary/20 space-y-3 animate-fadeIn">
+                        <div>
+                          <p className="text-xs font-bold text-gray-900">Confirm Completed UPI Transaction</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            If you have paid in PhonePe, Google Pay, or Paytm, enter your UPI Reference / UTR number below to confirm:
+                          </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={manualUtr}
+                            onChange={(e) => setManualUtr(e.target.value)}
+                            placeholder="e.g. 12-digit UTR (optional) or leave blank"
+                            className="flex-1 px-3 py-2 text-xs rounded-xl bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            loading={loading}
+                            onClick={handleManualConfirm}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4"
+                          >
+                            <Check className="h-3.5 w-3.5 mr-1.5" />
+                            <span>Confirm My Order</span>
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
