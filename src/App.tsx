@@ -5,7 +5,6 @@ import { useCatalogStore } from './store/useCatalogStore';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AppDownloadPopup } from './components/common/AppDownloadPopup';
-import { FloatingConcierge } from './components/common/FloatingConcierge';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 
 // Import Pages
@@ -81,9 +80,6 @@ export const App: React.FC = () => {
 
         <Footer />
       </div>
-
-      {/* Global Concierge & Support Floating Widget */}
-      <FloatingConcierge />
 
       {/* Global App Download Popup */}
       <AppDownloadPopup />

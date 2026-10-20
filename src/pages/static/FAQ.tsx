@@ -78,7 +78,7 @@ export const FAQ: React.FC = () => {
     {
       category: "Wholesale & Collabs",
       question: "Do you offer bulk orders for teams, brands, or retail boutiques?",
-      answer: "Yes. Our Studio division accepts custom corporate capsules, brand collaborations, and select retail partnerships. Contact our styling concierge at muhammad1211junaid@gmail.com with your quantities and timeline."
+      answer: "Yes. Our Studio division accepts custom corporate capsules, brand collaborations, and select retail partnerships. Contact our styling concierge at support@example.com with your quantities and timeline."
     }
   ];
 
@@ -148,10 +148,10 @@ export const FAQ: React.FC = () => {
             Contact Styling Concierge
           </a>
           <a
-            href="mailto:muhammad1211junaid@gmail.com"
+            href="mailto:support@example.com"
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
           >
-            Email: muhammad1211junaid@gmail.com
+            Email: support@example.com
           </a>
         </div>
       </div>

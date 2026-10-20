@@ -74,7 +74,7 @@ export const Contact: React.FC = () => {
               <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
               <div>
                 <strong className="block text-gray-900 font-bold">Showroom & Experience Center</strong>
-                <span>Under pass flyover, Buxar, Distt. Hapur, Uttar Pradesh</span>
+                <span>[Your Store / Showroom Address Here], City, State - PIN</span>
               </div>
             </div>
 
@@ -84,19 +84,14 @@ export const Contact: React.FC = () => {
                 <strong className="block text-gray-900 font-bold">Direct Phone & WhatsApp Support</strong>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <a href="tel:+917055435358" className="font-semibold text-primary hover:underline">+91 70554 35358</a>
+                    <a href="tel:+910000000000" className="font-semibold text-primary hover:underline">+91 00000 00000</a>
                     <span className="text-gray-300">|</span>
-                    <a href="https://wa.me/917055435358" target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline font-medium">WhatsApp</a>
+                    <a href="https://wa.me/910000000000" target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline font-medium">WhatsApp</a>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a href="tel:+919084339649" className="font-semibold text-primary hover:underline">+91 90843 39649</a>
+                    <a href="tel:+910000000001" className="font-semibold text-primary hover:underline">+91 00000 00001</a>
                     <span className="text-gray-300">|</span>
-                    <a href="https://wa.me/919084339649" target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline font-medium">WhatsApp</a>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a href="tel:+916399525356" className="font-semibold text-primary hover:underline">+91 63995 25356</a>
-                    <span className="text-gray-300">|</span>
-                    <a href="https://wa.me/916399525356" target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline font-medium">WhatsApp</a>
+                    <a href="https://wa.me/910000000001" target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline font-medium">WhatsApp</a>
                   </div>
                 </div>
                 <span className="text-gray-400 block text-[11px] pt-0.5">Mon – Sat, 9:00 AM – 8:00 PM IST</span>
@@ -107,8 +102,8 @@ export const Contact: React.FC = () => {
               <Mail className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
               <div>
                 <strong className="block text-gray-900 font-bold">Email Inquiries & Orders</strong>
-                <a href="mailto:muhammad1211junaid@gmail.com" className="hover:text-primary transition-colors block font-semibold text-primary break-all">
-                  muhammad1211junaid@gmail.com
+                <a href="mailto:support@example.com" className="hover:text-primary transition-colors block font-semibold text-primary break-all">
+                  support@example.com
                 </a>
                 <span className="text-gray-400 block text-[11px] mt-0.5">24/7 client concierge support</span>
               </div>

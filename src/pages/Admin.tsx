@@ -5462,7 +5462,7 @@ export const Admin: React.FC = () => {
                     <h1 className="text-2xl font-black tracking-tight text-gray-900 uppercase">TRYVOAL</h1>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-primary mt-1">Modern Luxury Streetwear & Premium Apparel</p>
-                  <p className="text-xs text-gray-500 mt-1">Under pass flyover, Buxar, Distt. Hapur, Uttar Pradesh • muhammad1211junaid@gmail.com • +91 70554 35358 / +91 90843 39649 / +91 63995 25356</p>
+                  <p className="text-xs text-gray-500 mt-1">[Store Address Placeholder], City, State - PIN • support@example.com • +91 00000 00000</p>
                 </div>
                 <div className="text-right sm:text-right">
                   <span className="inline-block px-3 py-1 rounded bg-primary/10 border border-primary/20 text-primary text-xs font-extrabold uppercase tracking-wider mb-2">
