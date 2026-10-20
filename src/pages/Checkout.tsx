@@ -106,6 +106,8 @@ export const Checkout: React.FC = () => {
   const [verifyingNow, setVerifyingNow] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dbOrderIdRef = useRef<string | null>(null);
+  const orderSessionIdRef = useRef<string | null>(null);
+  const isPaymentConfirmedRef = useRef<boolean>(false);
 
   // Enforce mandatory authentication: user must be logged in to checkout
   useEffect(() => {
@@ -180,6 +182,7 @@ export const Checkout: React.FC = () => {
   });
 
   // Save or update order in both Supabase and all localStorage keys
+  // Save or update order in both Supabase and all localStorage keys
   const recordOrder = async (
     orderId: string,
     existingDbId: string | null,
@@ -204,6 +207,7 @@ export const Checkout: React.FC = () => {
             status: orderStatus,
             payment_status: paymentStatusVal,
             shipping_address: shippingJson,
+            order_ref: orderId,
           })
           .eq('id', existingDbId);
         if (updErr) console.warn('Supabase order update warning:', updErr);
@@ -217,6 +221,7 @@ export const Checkout: React.FC = () => {
           payment_status: paymentStatusVal,
           shipping_address: shippingJson,
           estimated_delivery_date: estDelivery.toISOString(),
+          order_ref: orderId,
         };
         if (isUuid) insertPayload.id = orderId;
 
@@ -262,6 +267,9 @@ export const Checkout: React.FC = () => {
               product_id: item.product.id,
               quantity: item.quantity,
               price: item.variantPrice ?? item.product.price,
+              selected_variant: item.selectedVariant || null,
+              selected_variant_id: item.selectedVariantId || null,
+              selected_attributes: item.selectedAttributes || {},
             }));
             await supabase.from('order_items').insert(orderItemsPayload);
           } catch (itemsErr) {
@@ -293,7 +301,13 @@ export const Checkout: React.FC = () => {
       for (const k of keys) {
         try {
           const current = JSON.parse(localStorage.getItem(k) || '[]');
-          const filtered = current.filter((o: any) => o.id !== localOrderObj.id && o.order_ref !== orderId);
+          const filtered = current.filter((o: any) => {
+            if (!o) return false;
+            if (localOrderObj.id && o.id === localOrderObj.id) return false;
+            if (orderId && (o.order_ref === orderId || o.shipping_address?.order_ref === orderId)) return false;
+            if (paymentId && (o.payment_id === paymentId || o.shipping_address?.paymentId === paymentId)) return false;
+            return true;
+          });
           filtered.unshift(localOrderObj);
           localStorage.setItem(k, JSON.stringify(filtered));
         } catch (_) {}
@@ -308,10 +322,19 @@ export const Checkout: React.FC = () => {
     return recordedDbId;
   };
 
-  // Confirm payment and transition to Step 4
+  // Confirm payment and transition to Step 4 (with idempotency guard)
   const confirmPaymentSuccess = async (paymentId: string) => {
-    const currentOrderId = orderCreatedId || `ord-${Date.now()}`;
-    const targetDbId = dbOrderId || dbOrderIdRef.current;
+    if (isPaymentConfirmedRef.current) return;
+    isPaymentConfirmedRef.current = true;
+
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    setPollingActive(false);
+
+    const currentOrderId = orderSessionIdRef.current || orderCreatedId || `ord-${Date.now()}`;
+    const targetDbId = dbOrderIdRef.current || dbOrderId;
 
     const finalDbId = await recordOrder(
       currentOrderId,
@@ -410,11 +433,24 @@ export const Checkout: React.FC = () => {
 
       pollingRef.current = setInterval(async () => {
         try {
+          if (isPaymentConfirmedRef.current) {
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
+            setPollingActive(false);
+            return;
+          }
+
           const result = await checkTrustGatewayStatus(gatewayOrderId);
 
           if (result.paid === true && result.data?.order_id === gatewayOrderId) {
+            if (isPaymentConfirmedRef.current) return;
             // Payment confirmed!
-            if (pollingRef.current) clearInterval(pollingRef.current);
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
             setPollingActive(false);
             setPaymentStatus('paid');
 
@@ -434,13 +470,17 @@ export const Checkout: React.FC = () => {
 
   // Manual Instant Status Check
   const handleCheckStatusNow = async () => {
-    if (!tgOrderId) return;
+    if (!tgOrderId || isPaymentConfirmedRef.current) return;
     setVerifyingNow(true);
     setErrorMsg('');
     try {
       const result = await checkTrustGatewayStatus(tgOrderId);
       if (result.paid === true && result.data?.order_id === tgOrderId) {
-        if (pollingRef.current) clearInterval(pollingRef.current);
+        if (isPaymentConfirmedRef.current) return;
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
         setPollingActive(false);
         setPaymentStatus('paid');
 
@@ -460,10 +500,14 @@ export const Checkout: React.FC = () => {
 
   // Manual Confirmation (Customer completed payment in PhonePe/GPay/Paytm)
   const handleManualConfirm = async () => {
+    if (isPaymentConfirmedRef.current) return;
     setLoading(true);
     setErrorMsg('');
     try {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
       setPollingActive(false);
       setPaymentStatus('paid');
 
@@ -495,19 +539,22 @@ export const Checkout: React.FC = () => {
     setErrorMsg('');
 
     try {
-      // Generate local order reference
-      const localOrderId = orderCreatedId || `ord-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      // Reuse or generate single stable local order reference for this checkout session
+      if (!orderSessionIdRef.current) {
+        orderSessionIdRef.current = orderCreatedId || `ord-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      }
+      const localOrderId = orderSessionIdRef.current;
       setOrderCreatedId(localOrderId);
 
       const deliveryDate = new Date();
       deliveryDate.setDate(deliveryDate.getDate() + 5);
       setOrderDeliveryDate(deliveryDate.toISOString());
 
-      // 1. Immediately create order in Supabase and local storage as PENDING_PAYMENT
+      // 1. Immediately create or update order in Supabase and local storage as PENDING_PAYMENT
       // This guarantees the admin sees the order even if customer closes the payment tab or polling lags!
       const createdDbId = await recordOrder(
         localOrderId,
-        dbOrderId || dbOrderIdRef.current,
+        dbOrderIdRef.current || dbOrderId,
         'PENDING_PAYMENT',
         'PENDING_PAYMENT',
         '',

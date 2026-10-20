@@ -610,6 +610,19 @@ export const Admin: React.FC = () => {
   // Dedicated background fetch for orders (100% resilient, zero UI blinking)
   const fetchOrdersList = useCallback(async (): Promise<Order[]> => {
     try {
+      const parseShippingJson = (raw: any): Record<string, any> => {
+        if (!raw) return {};
+        if (typeof raw === 'string') {
+          try {
+            const parsed = JSON.parse(raw);
+            return typeof parsed === 'object' && parsed !== null ? parsed : {};
+          } catch {
+            return {};
+          }
+        }
+        return typeof raw === 'object' && raw !== null ? raw : {};
+      };
+
       let dbOrdersList: any[] = [];
       try {
         const { data: dbOrders, error: ordersErr } = await supabase
@@ -658,7 +671,7 @@ export const Admin: React.FC = () => {
 
           dbOrdersList = dbOrders.map((order: any) => {
             const separateItems = itemsByOrderId[order.id] || [];
-            const rawAddr = order.shipping_address || {};
+            const rawAddr = parseShippingJson(order.shipping_address);
             const embeddedItems = rawAddr.items || rawAddr.cart_items || [];
             const itemVariants = rawAddr.item_variants || [];
 
@@ -700,6 +713,7 @@ export const Admin: React.FC = () => {
 
             return {
               ...order,
+              shipping_address: rawAddr,
               payment_proof: proof,
               items: resolvedItems
             };
@@ -711,7 +725,7 @@ export const Admin: React.FC = () => {
 
       // Read local offline/resilience orders across all known storage keys
       const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
-      const localOrdersMap = new Map<string, any>();
+      const rawLocalOrders: any[] = [];
       for (const k of localOrderKeys) {
         try {
           const raw = localStorage.getItem(k);
@@ -719,43 +733,106 @@ export const Admin: React.FC = () => {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
               for (const lo of parsed) {
-                if (lo && lo.id && !localOrdersMap.has(lo.id)) {
-                  localOrdersMap.set(lo.id, lo);
+                if (lo && (lo.id || lo.order_ref)) {
+                  rawLocalOrders.push(lo);
                 }
               }
             }
           }
         } catch (_) {}
       }
-      const localOrders = Array.from(localOrdersMap.values());
-      const existingDbIds = new Set(dbOrdersList.map((o: any) => o.id));
 
-      const enrichedDbOrders = dbOrdersList.map((dbO: any) => {
-        if (!dbO.items || dbO.items.length === 0) {
-          const localMatch = localOrdersMap.get(dbO.id);
-          if (localMatch?.items && localMatch.items.length > 0) {
-            return { ...dbO, items: localMatch.items };
+      // Combine both sources and deduplicate with an advanced multi-factor key
+      const combinedPool = [...dbOrdersList, ...rawLocalOrders];
+      const mergedOrdersMap = new Map<string, any>();
+
+      for (const rawOrder of combinedPool) {
+        if (!rawOrder) continue;
+        const shipping = parseShippingJson(rawOrder.shipping_address);
+        const orderRef = rawOrder.order_ref || shipping.order_ref || '';
+        const paymentRef = rawOrder.payment_id || shipping.paymentId || shipping.transactionId || '';
+        const orderId = String(rawOrder.id || '');
+
+        // Determine unique deduplication key: order_ref > paymentRef > orderId
+        const dedupeKey = orderRef
+          ? `ref:${orderRef}`
+          : paymentRef
+          ? `pay:${paymentRef}`
+          : `id:${orderId}`;
+
+        const existing = mergedOrdersMap.get(dedupeKey);
+
+        const currentItems = (rawOrder.items && rawOrder.items.length > 0)
+          ? rawOrder.items
+          : (shipping.items && shipping.items.length > 0)
+          ? shipping.items
+          : [];
+
+        const normalizedItems = currentItems.map((it: any) => ({
+          ...it,
+          product: it.product || {
+            name: it.product_name || 'Anime Apparel Item',
+            main_image_url: it.image_url || '/placeholder.jpg',
+            sku: it.sku || (it.selected_variant_id ? `TYV-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
+            price: it.price || 0
           }
-        }
-        return dbO;
-      });
-
-      const normalizedLocalOrders = localOrders
-        .filter((lo: any) => !existingDbIds.has(lo.id))
-        .map((lo: any) => ({
-          ...lo,
-          items: (lo.items || []).map((it: any) => ({
-            ...it,
-            product: it.product || {
-              name: it.product_name || 'Anime Apparel Item',
-              main_image_url: it.image_url || '/placeholder.jpg',
-              sku: it.sku || (it.selected_variant_id ? `TYV-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
-              price: it.price || 0
-            }
-          }))
         }));
 
-      return [...enrichedDbOrders, ...normalizedLocalOrders].sort((a: any, b: any) => {
+        const normalizedOrder = {
+          ...rawOrder,
+          shipping_address: shipping,
+          items: normalizedItems,
+          order_ref: orderRef || existing?.order_ref || orderId,
+        };
+
+        if (!existing) {
+          mergedOrdersMap.set(dedupeKey, normalizedOrder);
+        } else {
+          // Merge: Prefer PAID over PENDING_PAYMENT, prefer Supabase UUID over local temporary ID, prefer non-empty items
+          const isPaid = normalizedOrder.status === 'PAID' || normalizedOrder.payment_status === 'PAID';
+          const existingIsPaid = existing.status === 'PAID' || existing.payment_status === 'PAID';
+          const hasUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId);
+
+          const merged = {
+            ...existing,
+            ...(isPaid || !existingIsPaid ? normalizedOrder : {}),
+            id: hasUuid ? orderId : existing.id,
+            status: isPaid ? 'PAID' : (existing.status || normalizedOrder.status),
+            payment_status: isPaid ? 'PAID' : (existing.payment_status || normalizedOrder.payment_status),
+            items: normalizedItems.length > 0 ? normalizedItems : existing.items,
+            shipping_address: Object.keys(shipping).length > 2 ? shipping : existing.shipping_address,
+            created_at: existing.created_at || normalizedOrder.created_at,
+          };
+          mergedOrdersMap.set(dedupeKey, merged);
+        }
+      }
+
+      // Secondary deduplication pass: catch any duplicate rows sharing same phone, amount, and ~5-min window
+      const finalUniqueOrders: any[] = [];
+      const seenSignatures = new Set<string>();
+
+      for (const ord of mergedOrdersMap.values()) {
+        const addr = ord.shipping_address || {};
+        const phone = (addr.phone || '').trim().replace(/[^0-9]/g, '');
+        const amount = Math.round(Number(ord.total_amount) || 0);
+        const timeBucket = ord.created_at ? Math.floor(new Date(ord.created_at).getTime() / (1000 * 60 * 5)) : 0;
+
+        const fuzzySignature = phone && amount > 0 && timeBucket > 0
+          ? `${phone}-${amount}-${timeBucket}`
+          : null;
+
+        if (fuzzySignature && seenSignatures.has(fuzzySignature)) {
+          continue;
+        }
+
+        if (fuzzySignature) {
+          seenSignatures.add(fuzzySignature);
+        }
+
+        finalUniqueOrders.push(ord);
+      }
+
+      return finalUniqueOrders.sort((a: any, b: any) => {
         const timeA = new Date(a.created_at || 0).getTime();
         const timeB = new Date(b.created_at || 0).getTime();
         return timeB - timeA;
