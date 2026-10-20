@@ -376,6 +376,7 @@ ALTER TABLE public.product_questions DROP CONSTRAINT IF EXISTS product_questions
 ALTER TABLE public.product_questions ALTER COLUMN product_id TYPE TEXT;
 ALTER TABLE public.coupons DROP CONSTRAINT IF EXISTS coupons_discount_type_check;
 ALTER TABLE public.coupons ADD CONSTRAINT coupons_discount_type_check CHECK (discount_type IN ('PERCENTAGE', 'PERCENT', 'FIXED'));
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;
 
 -- DONE! After running:
 -- 1. Go to Authentication > Users, create your admin account

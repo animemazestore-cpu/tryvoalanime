@@ -1,5 +1,6 @@
 import { sanitizeSlug } from './persistence';
 import type { Category, Product, ProductVariant, ProductVariantConfig } from '../types/database';
+import { isProductPinned } from './pinnedProducts';
 
 export const CATEGORY_FIELDS = 'id, name, image_url, created_at';
 
@@ -100,6 +101,7 @@ export function parseProduct(raw: Record<string, unknown>): Product {
     variants: variants.length > 0 ? variants : undefined,
     is_new_arrival: Boolean(raw.is_new_arrival),
     is_active: raw.is_active !== false,
+    is_pinned: Boolean(raw.is_pinned) || isProductPinned(String(raw.id)),
     shipping_fee: raw.shipping_fee !== undefined ? Number(raw.shipping_fee) : 0,
     created_at: (raw.created_at as string) || new Date().toISOString(),
     ...(category ? { category } : {}),
@@ -174,5 +176,13 @@ export const FALLBACK_CATEGORIES: Category[] = [
 
 export { DEFAULT_ANIME_SERIES as ANIME_SERIES_LIST, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail } from './animeSubcategories';
 export type { AnimeSeriesEntry } from './animeSubcategories';
+export {
+  getCachedPinnedProductIds,
+  isProductPinned,
+  fetchPinnedProductIds,
+  savePinnedProductIds,
+  togglePinProduct,
+  setProductPinStatus,
+} from './pinnedProducts';
 
 export const FALLBACK_PRODUCTS: Product[] = [];

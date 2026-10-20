@@ -7,12 +7,12 @@ import type { Product, Category, Order, ProductQuestion, Review, NewsletterSubsc
 import { sanitizeSlug } from '../lib/persistence';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { ShieldCheck, Plus, Edit, Trash2, Check, X, CreditCard, ShoppingBag, List, MessageSquare, Star, Mail, Download, RefreshCcw, Tag, Megaphone, Calendar, Copy, MapPin, Menu, AlertTriangle, Search, Sliders, X as CloseIcon, Truck, Printer, QrCode, Package, Clock, ExternalLink, CheckCircle2, Zap } from 'lucide-react';
+import { ShieldCheck, Plus, Edit, Trash2, Check, X, CreditCard, ShoppingBag, List, MessageSquare, Star, Mail, Download, RefreshCcw, Tag, Megaphone, Calendar, Copy, MapPin, Menu, AlertTriangle, Search, Sliders, X as CloseIcon, Truck, Printer, QrCode, Package, Clock, ExternalLink, CheckCircle2, Zap, Pin } from 'lucide-react';
 import { ProductVariantEditor } from '../components/admin/ProductVariantEditor';
 import type { OptionDraft, VariantDraft } from '../components/admin/ProductVariantEditor';
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
-import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, type AnimeSeriesEntry } from '../lib/catalogQueries';
+import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, togglePinProduct, setProductPinStatus } from '../lib/catalogQueries';
 import { DEFAULT_HERO_CONFIG, getCachedHeroConfig, fetchHeroConfig, saveHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
 import type { QikinkConfig } from '../lib/qikink';
@@ -88,8 +88,13 @@ export const Admin: React.FC = () => {
     warranty_info: '',
     is_new_arrival: false,
     is_active: true,
+    is_pinned: false,
     shipping_fee: 0,
   });
+
+  // Pinned products state & filter
+  const [pinnedProductIds, setPinnedProductIds] = useState<string[]>(() => getCachedPinnedProductIds());
+  const [filterPinnedOnly, setFilterPinnedOnly] = useState(false);
 
   // Variant States
   const [hasVariants, setHasVariants] = useState(false);
@@ -408,6 +413,47 @@ export const Admin: React.FC = () => {
     window.addEventListener('anime_thumbnails_updated', handleThumbnailsUpdated);
     return () => window.removeEventListener('anime_thumbnails_updated', handleThumbnailsUpdated);
   }, []);
+
+  // Load pinned products on mount and listen to updates
+  useEffect(() => {
+    fetchPinnedProductIds().then(setPinnedProductIds);
+
+    const handlePinnedUpdated = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setPinnedProductIds(e.detail);
+      } else {
+        setPinnedProductIds(getCachedPinnedProductIds());
+      }
+    };
+    window.addEventListener('pinned_products_updated', handlePinnedUpdated);
+    return () => window.removeEventListener('pinned_products_updated', handlePinnedUpdated);
+  }, []);
+
+  const handleTogglePinProduct = async (productId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const isCurrentlyPinned = pinnedProductIds.includes(productId);
+    const updated = isCurrentlyPinned
+      ? pinnedProductIds.filter((id) => id !== productId)
+      : [...pinnedProductIds, productId];
+    setPinnedProductIds(updated);
+
+    try {
+      const res = await togglePinProduct(productId);
+      if (res.ids) {
+        setPinnedProductIds(res.ids);
+      }
+      const existingProduct = products.find((p) => p.id === productId);
+      if (existingProduct) {
+        useCatalogStore.getState().updateProduct({
+          ...existingProduct,
+          is_pinned: !isCurrentlyPinned,
+        });
+      }
+    } catch (err: any) {
+      console.warn('Error toggling pin status:', err);
+      alert(`Error toggling pin: ${err?.message || err}`);
+    }
+  };
 
   const handleSaveHero = async () => {
     setSavingHero(true);
@@ -1159,6 +1205,7 @@ export const Admin: React.FC = () => {
       const updatedProductObj: Product = {
         id: targetId || (editingProduct ? editingProduct.id : `prod-local-${Date.now()}`),
         ...payload,
+        is_pinned: Boolean(productForm.is_pinned),
         category: categories.find(c => c.id === payload.category_id),
         variants: shouldHaveVariants ? activeVariants.map((v, i) => ({
           id: v.id || `var-${Date.now()}-${i}`,
@@ -1172,6 +1219,10 @@ export const Admin: React.FC = () => {
         })) : undefined,
         created_at: editingProduct ? editingProduct.created_at : new Date().toISOString()
       };
+
+      if (productForm.is_pinned !== undefined) {
+        await setProductPinStatus(updatedProductObj.id, Boolean(productForm.is_pinned));
+      }
 
       if (editingProduct) {
         setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProductObj : p));
@@ -1220,6 +1271,7 @@ export const Admin: React.FC = () => {
       warranty_info: prod.warranty_info || '',
       is_new_arrival: Boolean(prod.is_new_arrival),
       is_active: prod.is_active !== false,
+      is_pinned: Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id)),
       shipping_fee: prod.shipping_fee ?? 0,
     });
 
@@ -2402,6 +2454,21 @@ export const Admin: React.FC = () => {
                     ))}
                   </select>
 
+                  {/* Pinned Products Filter Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterPinnedOnly(!filterPinnedOnly)}
+                    className={`py-2 sm:py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+                      filterPinnedOnly
+                        ? 'bg-amber-500 text-black border-amber-400 shadow-sm'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    title={filterPinnedOnly ? 'Showing pinned products only (click to show all)' : 'Filter by pinned products'}
+                  >
+                    <Pin className={`h-3.5 w-3.5 ${filterPinnedOnly ? 'fill-current' : ''}`} />
+                    <span>Pinned ({pinnedProductIds.length})</span>
+                  </button>
+
                   <Button size="sm" className="w-full sm:w-auto justify-center" onClick={() => {
                     setEditingProduct(null);
                     setProductForm({
@@ -2421,6 +2488,7 @@ export const Admin: React.FC = () => {
                       warranty_info: '',
                       is_new_arrival: false,
                       is_active: true,
+                      is_pinned: false,
                       shipping_fee: 0,
                     });
                     setHasVariants(false);
@@ -2437,6 +2505,7 @@ export const Admin: React.FC = () => {
               <div className="md:hidden space-y-3">
                 {products
                   .filter((prod) => {
+                    if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned) return false;
                     if (selectedAnimeFilter !== 'all') {
                       const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
                       const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
@@ -2457,8 +2526,12 @@ export const Admin: React.FC = () => {
                       (prod.category?.name && prod.category.name.toLowerCase().includes(q))
                     );
                   })
-                  .map((prod) => (
-                    <div key={prod.id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
+                  .map((prod) => {
+                    const isPinned = Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id));
+                    return (
+                    <div key={prod.id} className={`p-3.5 rounded-2xl border space-y-3 transition-colors ${
+                      isPinned ? 'bg-amber-50/40 border-amber-200' : 'bg-gray-50 border-gray-200'
+                    }`}>
                       <div className="flex items-start gap-3">
                         <img
                           src={prod.main_image_url}
@@ -2474,6 +2547,12 @@ export const Admin: React.FC = () => {
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            {isPinned && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs">
+                                <Pin className="h-2.5 w-2.5 fill-amber-500 text-amber-700" />
+                                PINNED
+                              </span>
+                            )}
                             {prod.sku && (
                               <span className="text-[10px] text-gray-600 font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">
                                 {prod.sku}
@@ -2518,7 +2597,20 @@ export const Admin: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleTogglePinProduct(prod.id, e)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 border text-xs font-bold rounded-lg transition-colors shadow-sm ${
+                              isPinned
+                                ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600'
+                                : 'bg-white border-gray-300 hover:border-amber-500 text-gray-700 hover:text-amber-600'
+                            }`}
+                            title={isPinned ? 'Unpin from Top of Shop' : 'Pin to Top of Shop'}
+                          >
+                            <Pin className={`h-3.5 w-3.5 ${isPinned ? 'fill-white' : ''}`} />
+                            {isPinned ? 'Pinned' : 'Pin'}
+                          </button>
                           <button
                             onClick={() => handleEditProduct(prod)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-300 hover:border-primary text-primary text-xs font-bold rounded-lg transition-colors shadow-sm"
@@ -2534,7 +2626,8 @@ export const Admin: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
               </div>
 
               {/* Desktop Products Table */}
@@ -2554,6 +2647,7 @@ export const Admin: React.FC = () => {
                   <tbody className="divide-y divide-gray-200">
                     {products
                       .filter((prod) => {
+                        if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned) return false;
                         if (selectedAnimeFilter !== 'all') {
                           const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
                           const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
@@ -2574,75 +2668,100 @@ export const Admin: React.FC = () => {
                           (prod.category?.name && prod.category.name.toLowerCase().includes(q))
                         );
                       })
-                      .map((prod) => (
-                      <tr key={prod.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-3">
-                          <img src={prod.main_image_url} alt="" className="w-12 h-14 object-cover rounded-xl bg-gray-100 border border-gray-200 shadow-sm" />
-                        </td>
-                        <td className="px-6 py-3">
-                          <p className="font-bold text-gray-900 text-sm hover:text-primary">{prod.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {prod.sku && (
-                              <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
-                                {prod.sku}
+                      .map((prod) => {
+                        const isPinned = Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id));
+                        return (
+                        <tr key={prod.id} className={`transition-colors ${
+                          isPinned ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-gray-50'
+                        }`}>
+                          <td className="px-6 py-3">
+                            <img src={prod.main_image_url} alt="" className="w-12 h-14 object-cover rounded-xl bg-gray-100 border border-gray-200 shadow-sm" />
+                          </td>
+                          <td className="px-6 py-3">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-gray-900 text-sm hover:text-primary">{prod.name}</p>
+                              {isPinned && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs flex-shrink-0">
+                                  <Pin className="h-2.5 w-2.5 fill-amber-500 text-amber-700" />
+                                  Pinned
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {prod.sku && (
+                                <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {prod.sku}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                                {prod.brand || 'Anime'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3 text-xs text-gray-700 font-medium">
+                            {prod.category?.name || 'Unassigned'}
+                          </td>
+                          <td className="px-6 py-3 text-xs text-gray-500">
+                            <p className="text-gray-800 font-medium truncate max-w-[140px]">{prod.material || 'Standard'}</p>
+                            <p className="text-[10px] text-gray-500 truncate max-w-[140px]">{prod.finish || 'Standard Finish'}</p>
+                          </td>
+                          <td className="px-6 py-3">
+                            <span className="font-extrabold text-gray-900 block">
+                              ₹{prod.price.toLocaleString('en-IN')}
+                            </span>
+                            {prod.has_variants && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded mt-0.5">
+                                <Sliders className="h-2.5 w-2.5" />
+                                {prod.variants?.length ? `${prod.variants.length} Variants` : 'Multi-Option'}
                               </span>
                             )}
-                            <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                              {prod.brand || 'Anime'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-3 text-xs text-gray-700 font-medium">
-                          {prod.category?.name || 'Unassigned'}
-                        </td>
-                        <td className="px-6 py-3 text-xs text-gray-500">
-                          <p className="text-gray-800 font-medium truncate max-w-[140px]">{prod.material || 'Standard'}</p>
-                          <p className="text-[10px] text-gray-500 truncate max-w-[140px]">{prod.finish || 'Standard Finish'}</p>
-                        </td>
-                        <td className="px-6 py-3">
-                          <span className="font-extrabold text-gray-900 block">
-                            ₹{prod.price.toLocaleString('en-IN')}
-                          </span>
-                          {prod.has_variants && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded mt-0.5">
-                              <Sliders className="h-2.5 w-2.5" />
-                              {prod.variants?.length ? `${prod.variants.length} Variants` : 'Multi-Option'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3">
-                          {prod.stock <= 0 ? (
-                            <span className="text-[10px] font-bold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded uppercase">
-                              Out of Stock
-                            </span>
-                          ) : prod.stock <= 5 ? (
-                            <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded uppercase">
-                              {prod.stock} left
-                            </span>
-                          ) : (
-                            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                              {prod.stock} in stock
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-right space-x-2">
-                          <button
-                            onClick={() => handleEditProduct(prod)}
-                            className="p-1.5 bg-gray-100 border border-gray-300 hover:border-primary text-primary rounded-lg transition-colors"
-                            title="Edit Product & Variants"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(prod.id)}
-                            className="p-1.5 bg-gray-100 border border-gray-200 hover:border-danger/40 text-danger rounded-lg transition-colors"
-                            title="Delete Product"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-6 py-3">
+                            {prod.stock <= 0 ? (
+                              <span className="text-[10px] font-bold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded uppercase">
+                                Out of Stock
+                              </span>
+                            ) : prod.stock <= 5 ? (
+                              <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded uppercase">
+                                {prod.stock} left
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                {prod.stock} in stock
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-right space-x-2">
+                            <button
+                              type="button"
+                              onClick={(e) => handleTogglePinProduct(prod.id, e)}
+                              className={`p-1.5 border rounded-lg transition-all ${
+                                isPinned
+                                  ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-sm'
+                                  : 'bg-gray-100 border-gray-300 hover:border-amber-500 text-gray-600 hover:text-amber-600'
+                              }`}
+                              title={isPinned ? 'Unpin from Top of Shop' : 'Pin to Top of Shop'}
+                            >
+                              <Pin className={`h-4 w-4 ${isPinned ? 'fill-white' : ''}`} />
+                            </button>
+                            <button
+                              onClick={() => handleEditProduct(prod)}
+                              className="p-1.5 bg-gray-100 border border-gray-300 hover:border-primary text-primary rounded-lg transition-colors"
+                              title="Edit Product & Variants"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(prod.id)}
+                              className="p-1.5 bg-gray-100 border border-gray-200 hover:border-danger/40 text-danger rounded-lg transition-colors"
+                              title="Delete Product"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -4970,6 +5089,19 @@ export const Admin: React.FC = () => {
 
                 {/* Badges and visibility */}
                 <div className="flex flex-wrap items-center gap-6 p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-semibold uppercase tracking-wider text-amber-800 bg-amber-50/80 border border-amber-300 px-3 py-1.5 rounded-lg shadow-xs">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(productForm.is_pinned)}
+                      onChange={(e) => setProductForm({ ...productForm, is_pinned: e.target.checked })}
+                      className="h-4 w-4 rounded border-amber-400 accent-amber-500"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      <Pin className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
+                      Pin to Top of Shop
+                    </span>
+                  </label>
+
                   <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-semibold uppercase tracking-wider text-gray-700">
                     <input
                       type="checkbox"

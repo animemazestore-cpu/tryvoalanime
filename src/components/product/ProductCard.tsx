@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { Heart } from 'lucide-react';
+import { Heart, Pin } from 'lucide-react';
 import type { Product } from '../../types/database';
 import { ProductDescription } from './ProductDescription';
 import { ProductImage } from './ProductImage';
@@ -45,11 +45,15 @@ export const ProductCard = memo(function ProductCard({
       onClick={handleClick}
     >
       <div className="relative aspect-[4/5] bg-surface overflow-hidden">
-        {showFeaturedBadge && (
+        {product.is_pinned ? (
+          <span className="absolute top-2.5 left-2.5 z-10 inline-flex items-center gap-1 px-2.5 py-0.5 bg-neutral-900/90 text-amber-400 border border-amber-400/50 backdrop-blur-sm text-[10px] font-black uppercase rounded-full tracking-wider shadow-md">
+            <Pin className="h-3 w-3 fill-amber-400 text-amber-400" /> Pinned
+          </span>
+        ) : showFeaturedBadge ? (
           <span className="absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 bg-primary text-white text-[10px] font-bold uppercase rounded-full tracking-wider shadow-sm">
             Featured
           </span>
-        )}
+        ) : null}
         <ProductImage
           src={product.main_image_url}
           alt={product.name}

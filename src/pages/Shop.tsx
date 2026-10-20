@@ -19,7 +19,7 @@ import { useCatalogStore } from '../store/useCatalogStore';
 import { Button } from '../components/common/Button';
 import { ProductCard } from '../components/product/ProductCard';
 import { ProductCardSkeleton } from '../components/product/ProductCardSkeleton';
-import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry } from '../lib/catalogQueries';
+import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds } from '../lib/catalogQueries';
 
 // Curated Anime Merch Facets
 const FINISH_FACETS = [
@@ -147,6 +147,8 @@ export const Shop: React.FC = () => {
 
   // Dynamic Anime Series (Universe / Sub-categories) with custom thumbnails
   const [animeSeriesList, setAnimeSeriesList] = useState<AnimeSeriesEntry[]>(() => getAllAnimeSeries());
+  // Pinned products that stay at the top of the shop
+  const [pinnedProductIds, setPinnedProductIds] = useState<string[]>(() => getCachedPinnedProductIds());
 
   useEffect(() => {
     fetchAnimeThumbnails().then(() => {
@@ -157,7 +159,21 @@ export const Shop: React.FC = () => {
       setAnimeSeriesList(getAllAnimeSeries());
     };
     window.addEventListener('anime_thumbnails_updated', handleUpdate);
-    return () => window.removeEventListener('anime_thumbnails_updated', handleUpdate);
+
+    fetchPinnedProductIds().then(setPinnedProductIds);
+    const handlePinnedUpdated = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setPinnedProductIds(e.detail);
+      } else {
+        setPinnedProductIds(getCachedPinnedProductIds());
+      }
+    };
+    window.addEventListener('pinned_products_updated', handlePinnedUpdated);
+
+    return () => {
+      window.removeEventListener('anime_thumbnails_updated', handleUpdate);
+      window.removeEventListener('pinned_products_updated', handlePinnedUpdated);
+    };
   }, []);
 
   // Sync state back to URL query parameters
@@ -337,6 +353,12 @@ export const Shop: React.FC = () => {
         return true;
       })
       .sort((a, b) => {
+        // Pinned products always stay at the top of the shop
+        const aPinned = Boolean(a.is_pinned || pinnedProductIds.includes(a.id));
+        const bPinned = Boolean(b.is_pinned || pinnedProductIds.includes(b.id));
+        if (aPinned && !bPinned) return -1;
+        if (!aPinned && bPinned) return 1;
+
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
         if (sortBy === 'popular') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
@@ -359,6 +381,7 @@ export const Shop: React.FC = () => {
     maxPrice,
     sortBy,
     categories,
+    pinnedProductIds,
   ]);
 
   // Handler for category select
@@ -1337,7 +1360,10 @@ export const Shop: React.FC = () => {
                 {filteredProducts.map((product) => (
                   <ProductCard
                     key={product.id}
-                    product={product}
+                    product={{
+                      ...product,
+                      is_pinned: Boolean(product.is_pinned || pinnedProductIds.includes(product.id)),
+                    }}
                     onNavigate={handleProductNavigate}
                     showWishlist={Boolean(user)}
                     isWishlisted={user ? isInWishlist(product.id) : false}

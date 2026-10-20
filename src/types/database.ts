@@ -73,6 +73,7 @@ export interface Product {
   variants?: ProductVariant[]; // Joined product_variants
   is_new_arrival?: boolean;
   is_active?: boolean;
+  is_pinned?: boolean;
   shipping_fee?: number | null;
 }
 
