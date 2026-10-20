@@ -456,9 +456,168 @@ export const Admin: React.FC = () => {
     }
   }, []);
 
+  // Dedicated background fetch for orders (100% resilient, zero UI blinking)
+  const fetchOrdersList = useCallback(async (): Promise<Order[]> => {
+    try {
+      let dbOrdersList: any[] = [];
+      try {
+        const { data: dbOrders, error: ordersErr } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!ordersErr && dbOrders && dbOrders.length > 0) {
+          const orderIds = dbOrders.map((o: any) => o.id);
+
+          const itemsByOrderId: Record<string, any[]> = {};
+          try {
+            const { data: dbItems, error: itemsErr } = await supabase
+              .from('order_items')
+              .select('*, product:products(*)')
+              .in('order_id', orderIds);
+
+            if (!itemsErr && dbItems) {
+              for (const it of dbItems) {
+                if (!itemsByOrderId[it.order_id]) itemsByOrderId[it.order_id] = [];
+                itemsByOrderId[it.order_id].push(it);
+              }
+            }
+          } catch (_) {}
+
+          const proofsByOrderId: Record<string, any> = {};
+          try {
+            const { data: dbProofs } = await supabase
+              .from('payment_proofs')
+              .select('*')
+              .in('order_id', orderIds);
+            if (dbProofs) {
+              for (const p of dbProofs) proofsByOrderId[p.order_id] = p;
+            }
+          } catch (_) {
+            try {
+              const { data: dbProofsSingular } = await supabase
+                .from('payment_proof')
+                .select('*')
+                .in('order_id', orderIds);
+              if (dbProofsSingular) {
+                for (const p of dbProofsSingular) proofsByOrderId[p.order_id] = p;
+              }
+            } catch (_) {}
+          }
+
+          dbOrdersList = dbOrders.map((order: any) => {
+            const separateItems = itemsByOrderId[order.id] || [];
+            const rawAddr = order.shipping_address || {};
+            const embeddedItems = rawAddr.items || rawAddr.cart_items || [];
+            const itemVariants = rawAddr.item_variants || [];
+
+            const resolvedItems = separateItems.length > 0
+              ? separateItems.map((item: any) => {
+                  const matchedVariant = itemVariants.find((iv: any) => iv.product_id === item.product_id);
+                  return {
+                    ...item,
+                    selected_variant: item.selected_variant || matchedVariant?.selected_variant || null,
+                    product: item.product || {
+                      name: item.product_name || 'Anime Apparel Item',
+                      main_image_url: item.image_url || '/placeholder.jpg',
+                      price: item.price || 0,
+                      sku: item.sku || null,
+                    }
+                  };
+                })
+              : embeddedItems.map((emb: any, idx: number) => ({
+                  id: emb.id || `emb-${order.id}-${idx}`,
+                  order_id: order.id,
+                  product_id: emb.product_id || emb.product?.id,
+                  product_name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
+                  quantity: emb.quantity || 1,
+                  price: emb.price || emb.variantPrice || emb.product?.price || 0,
+                  selected_variant: emb.selected_variant || emb.selectedVariant || null,
+                  selected_variant_id: emb.selected_variant_id || emb.selectedVariantId || null,
+                  selected_attributes: emb.selected_attributes || emb.selectedAttributes || {},
+                  image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
+                  product: emb.product || {
+                    id: emb.product_id,
+                    name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
+                    main_image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
+                    price: emb.price || 0,
+                    sku: emb.sku || null,
+                  }
+                }));
+
+            const proof = proofsByOrderId[order.id] || (Array.isArray(order.payment_proof) ? order.payment_proof[0] : order.payment_proof) || null;
+
+            return {
+              ...order,
+              payment_proof: proof,
+              items: resolvedItems
+            };
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Could not fetch DB orders:', dbErr);
+      }
+
+      // Read local offline/resilience orders across all known storage keys
+      const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
+      const localOrdersMap = new Map<string, any>();
+      for (const k of localOrderKeys) {
+        try {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              for (const lo of parsed) {
+                if (lo && lo.id && !localOrdersMap.has(lo.id)) {
+                  localOrdersMap.set(lo.id, lo);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      const localOrders = Array.from(localOrdersMap.values());
+      const existingDbIds = new Set(dbOrdersList.map((o: any) => o.id));
+
+      const enrichedDbOrders = dbOrdersList.map((dbO: any) => {
+        if (!dbO.items || dbO.items.length === 0) {
+          const localMatch = localOrdersMap.get(dbO.id);
+          if (localMatch?.items && localMatch.items.length > 0) {
+            return { ...dbO, items: localMatch.items };
+          }
+        }
+        return dbO;
+      });
+
+      const normalizedLocalOrders = localOrders
+        .filter((lo: any) => !existingDbIds.has(lo.id))
+        .map((lo: any) => ({
+          ...lo,
+          items: (lo.items || []).map((it: any) => ({
+            ...it,
+            product: it.product || {
+              name: it.product_name || 'Anime Apparel Item',
+              main_image_url: it.image_url || '/placeholder.jpg',
+              sku: it.sku || (it.selected_variant_id ? `TYV-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
+              price: it.price || 0
+            }
+          }))
+        }));
+
+      return [...enrichedDbOrders, ...normalizedLocalOrders].sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeB - timeA;
+      }) as Order[];
+    } catch {
+      return [];
+    }
+  }, []);
+
   // Load Data
-  const loadAdminData = async () => {
-    setLoadingData(true);
+  const loadAdminData = async (silentParam?: boolean | unknown) => {
+    const isSilent = silentParam === true;
+    if (!isSilent) setLoadingData(true);
 
     try {
       // 1. Fetch categories
@@ -575,207 +734,10 @@ export const Admin: React.FC = () => {
 
       // 3. Fetch orders (merge Supabase DB orders with local resilience orders)
       try {
-        let dbOrdersList: any[] = [];
-        try {
-          // 1. Resilient base orders fetch (cannot fail from missing foreign key relationships or schema cache mismatch)
-          const { data: dbOrders, error: ordersErr } = await supabase
-            .from('orders')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (ordersErr) {
-            console.warn('Supabase fetch base orders error:', ordersErr);
-          } else if (dbOrders && dbOrders.length > 0) {
-            const orderIds = dbOrders.map((o: any) => o.id);
-
-            // Safely fetch order_items in a separate query so a missing table/column won't break orders
-            const itemsByOrderId: Record<string, any[]> = {};
-            try {
-              const { data: dbItems, error: itemsErr } = await supabase
-                .from('order_items')
-                .select('*, product:products(*)')
-                .in('order_id', orderIds);
-
-              if (!itemsErr && dbItems) {
-                for (const it of dbItems) {
-                  if (!itemsByOrderId[it.order_id]) itemsByOrderId[it.order_id] = [];
-                  itemsByOrderId[it.order_id].push(it);
-                }
-              }
-            } catch (itErr) {
-              console.warn('Safe order_items query warning:', itErr);
-            }
-
-            // Safely fetch payment proofs without crashing if table/relation differs
-            const proofsByOrderId: Record<string, any> = {};
-            try {
-              const { data: dbProofs } = await supabase
-                .from('payment_proofs')
-                .select('*')
-                .in('order_id', orderIds);
-              if (dbProofs) {
-                for (const p of dbProofs) {
-                  proofsByOrderId[p.order_id] = p;
-                }
-              }
-            } catch (_) {
-              try {
-                const { data: dbProofsSingular } = await supabase
-                  .from('payment_proof')
-                  .select('*')
-                  .in('order_id', orderIds);
-                if (dbProofsSingular) {
-                  for (const p of dbProofsSingular) {
-                    proofsByOrderId[p.order_id] = p;
-                  }
-                }
-              } catch (_) {}
-            }
-
-            // Map and enrich orders, pulling embedded items from shipping_address if order_items was empty
-            dbOrdersList = dbOrders.map((order: any) => {
-              const separateItems = itemsByOrderId[order.id] || [];
-              const rawAddr = order.shipping_address || {};
-              const embeddedItems = rawAddr.items || rawAddr.cart_items || [];
-              const itemVariants = rawAddr.item_variants || [];
-
-              const resolvedItems = separateItems.length > 0
-                ? separateItems.map((item: any) => {
-                    const matchedVariant = itemVariants.find((iv: any) => iv.product_id === item.product_id);
-                    return {
-                      ...item,
-                      selected_variant: item.selected_variant || matchedVariant?.selected_variant || null,
-                      product: item.product || {
-                        name: item.product_name || 'Anime Apparel Item',
-                        main_image_url: item.image_url || '/placeholder.jpg',
-                        price: item.price || 0,
-                        sku: item.sku || null,
-                      }
-                    };
-                  })
-                : embeddedItems.map((emb: any, idx: number) => ({
-                    id: emb.id || `emb-${order.id}-${idx}`,
-                    order_id: order.id,
-                    product_id: emb.product_id || emb.product?.id,
-                    product_name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
-                    quantity: emb.quantity || 1,
-                    price: emb.price || emb.variantPrice || emb.product?.price || 0,
-                    selected_variant: emb.selected_variant || emb.selectedVariant || null,
-                    selected_variant_id: emb.selected_variant_id || emb.selectedVariantId || null,
-                    selected_attributes: emb.selected_attributes || emb.selectedAttributes || {},
-                    image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
-                    product: emb.product || {
-                      id: emb.product_id,
-                      name: emb.product_name || emb.product?.name || 'Anime Apparel Item',
-                      main_image_url: emb.image_url || emb.product?.main_image_url || '/placeholder.jpg',
-                      price: emb.price || 0,
-                      sku: emb.sku || null,
-                    }
-                  }));
-
-              const proof = proofsByOrderId[order.id] || (Array.isArray(order.payment_proof) ? order.payment_proof[0] : order.payment_proof) || null;
-
-              return {
-                ...order,
-                payment_proof: proof,
-                items: resolvedItems
-              };
-            });
-          }
-        } catch (dbErr) {
-          console.warn('Could not fetch DB orders:', dbErr);
-        }
-
-        // Read local offline/resilience orders across all known storage keys
-        const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
-        const localOrdersMap = new Map<string, any>();
-        for (const k of localOrderKeys) {
-          try {
-            const raw = localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                for (const lo of parsed) {
-                  if (lo && lo.id && !localOrdersMap.has(lo.id)) {
-                    localOrdersMap.set(lo.id, lo);
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.warn(`Error reading local orders from ${k}:`, e);
-          }
-        }
-        const localOrders = Array.from(localOrdersMap.values());
-
-        const existingDbIds = new Set(dbOrdersList.map((o: any) => o.id));
-
-        // If DB order has missing items, see if local storage order has them
-        const enrichedDbOrders = dbOrdersList.map((dbO: any) => {
-          if (!dbO.items || dbO.items.length === 0) {
-            const localMatch = localOrdersMap.get(dbO.id);
-            if (localMatch?.items && localMatch.items.length > 0) {
-              return { ...dbO, items: localMatch.items };
-            }
-          }
-          return dbO;
-        });
-
-        const normalizedLocalOrders = localOrders
-          .filter((lo: any) => !existingDbIds.has(lo.id))
-          .map((lo: any) => ({
-            ...lo,
-            items: (lo.items || []).map((it: any) => ({
-              ...it,
-              product: it.product || {
-                name: it.product_name || 'Anime Apparel Item',
-                main_image_url: it.image_url || '/placeholder.jpg',
-                sku: it.sku || (it.selected_variant_id ? `TYV-${it.selected_variant_id.slice(0, 8).toUpperCase()}` : null),
-                price: it.price || 0
-              }
-            }))
-          }));
-
-        const mergedOrders = [...enrichedDbOrders, ...normalizedLocalOrders].sort((a: any, b: any) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          return timeB - timeA;
-        });
-
-        setOrders(mergedOrders as Order[]);
+        const freshOrders = await fetchOrdersList();
+        setOrders(freshOrders);
       } catch (err) {
         console.error('Error loading orders:', err);
-        try {
-          const localOrderKeys = ['tryvoal_local_orders', 'animemaze_local_orders', 'elitebath_local_orders'];
-          const localOrdersMap = new Map<string, any>();
-          for (const k of localOrderKeys) {
-            const raw = localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                for (const lo of parsed) {
-                  if (lo && lo.id && !localOrdersMap.has(lo.id)) localOrdersMap.set(lo.id, lo);
-                }
-              }
-            }
-          }
-          const allLocal = Array.from(localOrdersMap.values());
-          const normalized = allLocal.map((lo: any) => ({
-            ...lo,
-            items: (lo.items || []).map((it: any) => ({
-              ...it,
-              product: it.product || {
-                name: it.product_name || 'Anime Apparel Item',
-                main_image_url: it.image_url || '/placeholder.jpg',
-                sku: it.sku || null,
-                price: it.price || 0
-              }
-            }))
-          }));
-          setOrders(normalized as Order[]);
-        } catch {
-          setOrders([]);
-        }
       }
 
       // 4. Fetch questions (DB + local resilient store)
@@ -848,7 +810,7 @@ export const Admin: React.FC = () => {
     } catch (err) {
       console.error('Error loading admin dashboard details:', err);
     } finally {
-      setLoadingData(false);
+      if (silentParam !== true) setLoadingData(false);
     }
   };
 
@@ -866,25 +828,42 @@ export const Admin: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab, loadReplacementsData]);
 
-  // Auto-refresh orders on storage event and periodic check on orders/verification tab
+  // Non-intrusive auto-refresh for orders: completely silent without blinking or full-page spinners
   useEffect(() => {
     const handleStorageChange = () => {
-      loadAdminData();
+      fetchOrdersList().then((fresh) => {
+        if (fresh && fresh.length > 0) {
+          setOrders((prev) => {
+            const prevIds = prev.map((o) => o.id + (o.status || '')).join(',');
+            const freshIds = fresh.map((o) => o.id + (o.status || '')).join(',');
+            return prevIds !== freshIds ? fresh : prev;
+          });
+        }
+      });
     };
     window.addEventListener('storage', handleStorageChange);
 
     let interval: ReturnType<typeof setInterval> | null = null;
     if (activeTab === 'orders' || activeTab === 'verification') {
       interval = setInterval(() => {
-        loadAdminData();
-      }, 8000);
+        fetchOrdersList().then((fresh) => {
+          if (fresh && fresh.length > 0) {
+            setOrders((prev) => {
+              const prevIds = prev.map((o) => o.id + (o.status || '')).join(',');
+              const freshIds = fresh.map((o) => o.id + (o.status || '')).join(',');
+              // Skip update if identical to eliminate re-renders completely
+              return prevIds !== freshIds ? fresh : prev;
+            });
+          }
+        });
+      }, 10000);
     }
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       if (interval) clearInterval(interval);
     };
-  }, [activeTab]);
+  }, [activeTab, fetchOrdersList]);
 
 
   // --- CRUD: Products ---
@@ -1965,7 +1944,7 @@ export const Admin: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={loadAdminData}
+              onClick={() => loadAdminData()}
               className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               title="Refresh Data"
             >
@@ -2067,7 +2046,7 @@ export const Admin: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={loadAdminData}
+              onClick={() => loadAdminData()}
               className="w-full"
             >
               <RefreshCcw className="h-4 w-4 mr-2" />
