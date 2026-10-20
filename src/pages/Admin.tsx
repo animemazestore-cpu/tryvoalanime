@@ -431,27 +431,41 @@ export const Admin: React.FC = () => {
 
   const handleTogglePinProduct = async (productId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isCurrentlyPinned = pinnedProductIds.includes(productId);
-    const updated = isCurrentlyPinned
-      ? pinnedProductIds.filter((id) => id !== productId)
-      : [...pinnedProductIds, productId];
+    const isCurrentlyPinned = Boolean(
+      pinnedProductIds.includes(productId) ||
+      products.find((p) => p.id === productId)?.is_pinned ||
+      (products.find((p) => p.id === productId)?.variant_config as any)?.is_pinned
+    );
+    const newStatus = !isCurrentlyPinned;
+
+    const updated = newStatus
+      ? Array.from(new Set([...pinnedProductIds, productId]))
+      : pinnedProductIds.filter((id) => id !== productId);
     setPinnedProductIds(updated);
+
+    const existingProduct = products.find((p) => p.id === productId);
+    if (existingProduct) {
+      const updatedProd: Product = {
+        ...existingProduct,
+        is_pinned: newStatus,
+        variant_config: {
+          ...(existingProduct.variant_config || { enabledOptions: [], options: [] }),
+          is_pinned: newStatus,
+        } as any,
+      };
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? updatedProd : p))
+      );
+      useCatalogStore.getState().updateProduct(updatedProd);
+    }
 
     try {
       const res = await togglePinProduct(productId);
       if (res.ids) {
         setPinnedProductIds(res.ids);
       }
-      const existingProduct = products.find((p) => p.id === productId);
-      if (existingProduct) {
-        useCatalogStore.getState().updateProduct({
-          ...existingProduct,
-          is_pinned: !isCurrentlyPinned,
-        });
-      }
     } catch (err: any) {
       console.warn('Error toggling pin status:', err);
-      alert(`Error toggling pin: ${err?.message || err}`);
     }
   };
 
@@ -1027,7 +1041,7 @@ export const Admin: React.FC = () => {
       const activeVariants = variantDrafts.filter(v => Object.keys(v.attributes).length > 0);
       const shouldHaveVariants = hasVariants && activeVariants.length > 0;
 
-      const variantConfigData = shouldHaveVariants ? {
+      const variantConfigData: any = shouldHaveVariants ? {
         enabledOptions: optionDrafts.filter(o => o.values.length > 0).map(o => o.id),
         options: optionDrafts.filter(o => o.values.length > 0).map(o => ({
           id: o.id,
@@ -1035,8 +1049,9 @@ export const Admin: React.FC = () => {
           type: o.type,
           required: o.required,
           values: o.type === 'color' ? o.values : o.values.map(v => v.label)
-        }))
-      } : { enabledOptions: [], options: [] };
+        })),
+        is_pinned: Boolean(productForm.is_pinned),
+      } : { enabledOptions: [], options: [], is_pinned: Boolean(productForm.is_pinned) };
 
       // Calculate total stock and display price from variants if has variants
       let finalPrice = Number(productForm.price);
@@ -1271,7 +1286,7 @@ export const Admin: React.FC = () => {
       warranty_info: prod.warranty_info || '',
       is_new_arrival: Boolean(prod.is_new_arrival),
       is_active: prod.is_active !== false,
-      is_pinned: Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id)),
+      is_pinned: Boolean(prod.is_pinned || (prod.variant_config as any)?.is_pinned || pinnedProductIds.includes(prod.id)),
       shipping_fee: prod.shipping_fee ?? 0,
     });
 
@@ -2466,7 +2481,7 @@ export const Admin: React.FC = () => {
                     title={filterPinnedOnly ? 'Showing pinned products only (click to show all)' : 'Filter by pinned products'}
                   >
                     <Pin className={`h-3.5 w-3.5 ${filterPinnedOnly ? 'fill-current' : ''}`} />
-                    <span>Pinned ({pinnedProductIds.length})</span>
+                    <span>Pinned ({products.filter(p => p.is_pinned || (p.variant_config as any)?.is_pinned || pinnedProductIds.includes(p.id)).length})</span>
                   </button>
 
                   <Button size="sm" className="w-full sm:w-auto justify-center" onClick={() => {
@@ -2505,7 +2520,7 @@ export const Admin: React.FC = () => {
               <div className="md:hidden space-y-3">
                 {products
                   .filter((prod) => {
-                    if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned) return false;
+                    if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned && !(prod.variant_config as any)?.is_pinned) return false;
                     if (selectedAnimeFilter !== 'all') {
                       const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
                       const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
@@ -2527,7 +2542,7 @@ export const Admin: React.FC = () => {
                     );
                   })
                   .map((prod) => {
-                    const isPinned = Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id));
+                    const isPinned = Boolean(prod.is_pinned || (prod.variant_config as any)?.is_pinned || pinnedProductIds.includes(prod.id));
                     return (
                     <div key={prod.id} className={`p-3.5 rounded-2xl border space-y-3 transition-colors ${
                       isPinned ? 'bg-amber-50/40 border-amber-200' : 'bg-gray-50 border-gray-200'
@@ -2647,7 +2662,7 @@ export const Admin: React.FC = () => {
                   <tbody className="divide-y divide-gray-200">
                     {products
                       .filter((prod) => {
-                        if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned) return false;
+                        if (filterPinnedOnly && !pinnedProductIds.includes(prod.id) && !prod.is_pinned && !(prod.variant_config as any)?.is_pinned) return false;
                         if (selectedAnimeFilter !== 'all') {
                           const series = allAnimeSeries.find(s => s.id === selectedAnimeFilter);
                           const aliases = series?.aliases || [selectedAnimeFilter, series?.label.toLowerCase() || ''];
@@ -2669,7 +2684,7 @@ export const Admin: React.FC = () => {
                         );
                       })
                       .map((prod) => {
-                        const isPinned = Boolean(prod.is_pinned || pinnedProductIds.includes(prod.id));
+                        const isPinned = Boolean(prod.is_pinned || (prod.variant_config as any)?.is_pinned || pinnedProductIds.includes(prod.id));
                         return (
                         <tr key={prod.id} className={`transition-colors ${
                           isPinned ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-gray-50'

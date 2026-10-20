@@ -33,6 +33,7 @@ export interface VariantOptionConfig {
 export interface ProductVariantConfig {
   enabledOptions: string[]; // e.g. ["color", "finish"]
   options: VariantOptionConfig[];
+  is_pinned?: boolean;
 }
 
 export interface ProductVariant {

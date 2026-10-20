@@ -78,34 +78,40 @@ export function parseProduct(raw: Record<string, unknown>): Product {
     totalStock = variants.reduce((acc, v) => acc + (v.active ? v.stock : 0), 0);
   }
 
-  return {
-    id: String(raw.id),
-    name: String(raw.name ?? ''),
-    slug: sanitizeSlug(String(raw.slug ?? ''), String(raw.name ?? '')),
-    description: (raw.description as string | null) ?? null,
-    category_id: (raw.category_id as string | null) ?? null,
-    price: displayPrice,
-    stock: totalStock,
-    featured: Boolean(raw.featured),
-    main_image_url: String(raw.main_image_url ?? ''),
-    additional_images: Array.isArray(raw.additional_images)
-      ? (raw.additional_images as string[])
-      : [],
-    sku: (raw.sku as string | null) ?? null,
-    brand: (raw.brand as string | null) ?? 'TRYVOAL',
-    material: (raw.material as string | null) ?? null,
-    finish: (raw.finish as string | null) ?? null,
-    warranty_info: (raw.warranty_info as string | null) ?? null,
-    has_variants: hasVariants,
-    variant_config: variantConfig,
-    variants: variants.length > 0 ? variants : undefined,
-    is_new_arrival: Boolean(raw.is_new_arrival),
-    is_active: raw.is_active !== false,
-    is_pinned: Boolean(raw.is_pinned) || isProductPinned(String(raw.id)),
-    shipping_fee: raw.shipping_fee !== undefined ? Number(raw.shipping_fee) : 0,
-    created_at: (raw.created_at as string) || new Date().toISOString(),
-    ...(category ? { category } : {}),
-  };
+    const isPinnedFromConfig = Boolean(
+      (variantConfig as any)?.is_pinned ||
+      (typeof raw.variant_config === 'object' && (raw.variant_config as any)?.is_pinned) ||
+      (typeof raw.variant_config === 'string' && raw.variant_config.includes('"is_pinned":true'))
+    );
+
+    return {
+      id: String(raw.id),
+      name: String(raw.name ?? ''),
+      slug: sanitizeSlug(String(raw.slug ?? ''), String(raw.name ?? '')),
+      description: (raw.description as string | null) ?? null,
+      category_id: (raw.category_id as string | null) ?? null,
+      price: displayPrice,
+      stock: totalStock,
+      featured: Boolean(raw.featured),
+      main_image_url: String(raw.main_image_url ?? ''),
+      additional_images: Array.isArray(raw.additional_images)
+        ? (raw.additional_images as string[])
+        : [],
+      sku: (raw.sku as string | null) ?? null,
+      brand: (raw.brand as string | null) ?? 'TRYVOAL',
+      material: (raw.material as string | null) ?? null,
+      finish: (raw.finish as string | null) ?? null,
+      warranty_info: (raw.warranty_info as string | null) ?? null,
+      has_variants: hasVariants,
+      variant_config: variantConfig,
+      variants: variants.length > 0 ? variants : undefined,
+      is_new_arrival: Boolean(raw.is_new_arrival),
+      is_active: raw.is_active !== false,
+      is_pinned: Boolean(raw.is_pinned || isPinnedFromConfig || isProductPinned(String(raw.id))),
+      shipping_fee: raw.shipping_fee !== undefined ? Number(raw.shipping_fee) : 0,
+      created_at: (raw.created_at as string) || new Date().toISOString(),
+      ...(category ? { category } : {}),
+    };
 }
 
 export function parseProducts(rows: Record<string, unknown>[] | null): Product[] {

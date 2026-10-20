@@ -354,8 +354,16 @@ export const Shop: React.FC = () => {
       })
       .sort((a, b) => {
         // Pinned products always stay at the top of the shop
-        const aPinned = Boolean(a.is_pinned || pinnedProductIds.includes(a.id));
-        const bPinned = Boolean(b.is_pinned || pinnedProductIds.includes(b.id));
+        const aPinned = Boolean(
+          a.is_pinned ||
+          (a.variant_config as any)?.is_pinned ||
+          pinnedProductIds.includes(a.id)
+        );
+        const bPinned = Boolean(
+          b.is_pinned ||
+          (b.variant_config as any)?.is_pinned ||
+          pinnedProductIds.includes(b.id)
+        );
         if (aPinned && !bPinned) return -1;
         if (!aPinned && bPinned) return 1;
 
