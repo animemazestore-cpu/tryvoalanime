@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS public.products (
   shipping_fee NUMERIC NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_products_is_pinned ON public.products(is_pinned);
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view products" ON public.products;
 DROP POLICY IF EXISTS "Admin can manage products" ON public.products;

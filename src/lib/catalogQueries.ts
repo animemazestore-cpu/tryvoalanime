@@ -185,6 +185,7 @@ export type { AnimeSeriesEntry } from './animeSubcategories';
 export {
   getCachedPinnedProductIds,
   isProductPinned,
+  isProductEffectivelyPinned,
   fetchPinnedProductIds,
   savePinnedProductIds,
   togglePinProduct,

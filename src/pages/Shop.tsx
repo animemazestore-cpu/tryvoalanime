@@ -19,7 +19,7 @@ import { useCatalogStore } from '../store/useCatalogStore';
 import { Button } from '../components/common/Button';
 import { ProductCard } from '../components/product/ProductCard';
 import { ProductCardSkeleton } from '../components/product/ProductCardSkeleton';
-import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds } from '../lib/catalogQueries';
+import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, isProductEffectivelyPinned } from '../lib/catalogQueries';
 
 // Curated Anime Merch Facets
 const FINISH_FACETS = [
@@ -354,16 +354,8 @@ export const Shop: React.FC = () => {
       })
       .sort((a, b) => {
         // Pinned products always stay at the top of the shop
-        const aPinned = Boolean(
-          a.is_pinned ||
-          (a.variant_config as any)?.is_pinned ||
-          pinnedProductIds.includes(a.id)
-        );
-        const bPinned = Boolean(
-          b.is_pinned ||
-          (b.variant_config as any)?.is_pinned ||
-          pinnedProductIds.includes(b.id)
-        );
+        const aPinned = isProductEffectivelyPinned(a, pinnedProductIds);
+        const bPinned = isProductEffectivelyPinned(b, pinnedProductIds);
         if (aPinned && !bPinned) return -1;
         if (!aPinned && bPinned) return 1;
 
@@ -1370,7 +1362,7 @@ export const Shop: React.FC = () => {
                     key={product.id}
                     product={{
                       ...product,
-                      is_pinned: Boolean(product.is_pinned || pinnedProductIds.includes(product.id)),
+                      is_pinned: isProductEffectivelyPinned(product, pinnedProductIds),
                     }}
                     onNavigate={handleProductNavigate}
                     showWishlist={Boolean(user)}

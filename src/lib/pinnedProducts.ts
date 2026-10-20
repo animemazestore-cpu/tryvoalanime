@@ -1,82 +1,126 @@
 import { supabase } from './supabase';
+import type { Product } from '../types/database';
 
 const STORAGE_KEY = 'tryvoal_pinned_product_ids';
 const DB_PREFIX_TAG = 'PINNED_PRODUCTS_DATA:';
+
+// Helper: Normalize product ID for matching
+export function normalizeProductId(id: unknown): string {
+  if (id === null || id === undefined) return '';
+  return String(id).trim().toLowerCase();
+}
 
 // Get cached array of pinned product IDs from localStorage
 export function getCachedPinnedProductIds(): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('elitebath_pinned_product_ids');
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(parsed.map((item) => String(item).trim()).filter(Boolean)));
   } catch {
     return [];
   }
 }
 
-// Check if a specific product ID is pinned
-export function isProductPinned(productId: string): boolean {
-  if (!productId) return false;
+// Check if a specific product ID is pinned in cache
+export function isProductPinned(productId: unknown): boolean {
+  const norm = normalizeProductId(productId);
+  if (!norm) return false;
   const ids = getCachedPinnedProductIds();
-  return ids.includes(productId);
+  return ids.some((id) => normalizeProductId(id) === norm);
+}
+
+// Robust helper to check if a Product is pinned across all possible fields and cache
+export function isProductEffectivelyPinned(product: Product | null | undefined, pinnedIds?: string[]): boolean {
+  if (!product) return false;
+  if (product.is_pinned === true) return true;
+
+  const cfg = product.variant_config as any;
+  if (cfg) {
+    if (cfg.is_pinned === true || cfg.is_pinned === 'true') return true;
+    if (typeof cfg === 'string' && (cfg.includes('"is_pinned":true') || cfg.includes('"is_pinned":"true"'))) {
+      return true;
+    }
+  }
+
+  const normId = normalizeProductId(product.id);
+  if (!normId) return false;
+
+  const list = pinnedIds && pinnedIds.length > 0 ? pinnedIds : getCachedPinnedProductIds();
+  return list.some((id) => normalizeProductId(id) === normId);
 }
 
 // Fetch pinned product IDs from Supabase database to ensure 100% sync across all devices
 export async function fetchPinnedProductIds(): Promise<string[]> {
-  // 1. Primary: Check products table (variant_config JSONB and is_pinned column)
-  // This is 100% guaranteed to work without needing separate table permissions
+  const foundPinnedIds = new Set<string>();
+
+  // 1. Primary: Check products table (variant_config JSONB)
+  // Query ONLY guaranteed columns: id, variant_config
   try {
-    const { data: prodData } = await supabase
+    const { data: prodData, error } = await supabase
       .from('products')
-      .select('id, variant_config, is_pinned');
+      .select('id, variant_config');
 
-    if (prodData && prodData.length > 0) {
-      const dbPinned = prodData
-        .filter((p: any) => {
-          if (p.is_pinned === true) return true;
-          if (p.variant_config) {
-            if (typeof p.variant_config === 'object' && p.variant_config.is_pinned) return true;
-            if (typeof p.variant_config === 'string' && p.variant_config.includes('"is_pinned":true')) return true;
+    if (!error && prodData && prodData.length > 0) {
+      for (const p of prodData) {
+        let cfg = p.variant_config;
+        if (typeof cfg === 'string') {
+          try {
+            cfg = JSON.parse(cfg);
+          } catch {
+            cfg = null;
           }
-          return false;
-        })
-        .map((p: any) => String(p.id));
-
-      if (dbPinned.length > 0) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(dbPinned));
         }
-        return dbPinned;
+        if (cfg && (cfg.is_pinned === true || cfg.is_pinned === 'true')) {
+          foundPinnedIds.add(String(p.id));
+        }
       }
     }
   } catch (err) {
-    console.warn('Could not check products table for pinned items:', err);
+    console.warn('Could not check products variant_config for pinned items:', err);
   }
 
-  // 2. Secondary: Check site_announcements backup storage
+  // 2. Secondary: Check if native is_pinned column exists in products table
   try {
-    const { data: annData, error } = await supabase
-      .from('site_announcements')
-      .select('message')
-      .ilike('message', '%PINNED_PRODUCTS%')
-      .order('created_at', { ascending: false })
-      .limit(1);
+    const { data: colData, error: colErr } = await supabase
+      .from('products')
+      .select('id')
+      .eq('is_pinned', true);
 
-    if (!error && annData && annData.length > 0 && annData[0].message) {
-      const rawMsg = annData[0].message;
-      const jsonStart = rawMsg.indexOf('[');
-      const jsonEnd = rawMsg.lastIndexOf(']');
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        const jsonStr = rawMsg.substring(jsonStart, jsonEnd + 1);
-        const parsed = JSON.parse(jsonStr);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleanIds = Array.from(new Set(parsed.map(String)));
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanIds));
-          }
-          return cleanIds;
+    if (!colErr && colData && colData.length > 0) {
+      for (const c of colData) {
+        foundPinnedIds.add(String(c.id));
+      }
+    }
+  } catch {
+    // Column is_pinned does not exist yet, safely continue
+  }
+
+  // 3. Redundancy: Check site_announcements backup storage
+  try {
+    const { data: annData, error: annErr } = await supabase
+      .from('site_announcements')
+      .select('id, message, created_at')
+      .ilike('message', '%PINNED_PRODUCTS%')
+      .order('created_at', { ascending: false });
+
+    if (!annErr && annData && annData.length > 0) {
+      for (const row of annData) {
+        if (!row.message) continue;
+        const start = row.message.indexOf('[');
+        const end = row.message.lastIndexOf(']');
+        if (start !== -1 && end !== -1 && end > start) {
+          try {
+            const parsed = JSON.parse(row.message.substring(start, end + 1));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              for (const id of parsed) {
+                foundPinnedIds.add(String(id));
+              }
+              break; // Newest announcement row was found and parsed
+            }
+          } catch {}
         }
       }
     }
@@ -84,29 +128,37 @@ export async function fetchPinnedProductIds(): Promise<string[]> {
     console.warn('Could not fetch pinned products from announcements:', err);
   }
 
-  // 3. Fallback: check site_settings table if it exists
+  // 4. Redundancy: check site_settings table if it exists
   try {
-    const { data: settingData, error } = await supabase
+    const { data: settingData, error: settingErr } = await supabase
       .from('site_settings')
       .select('value')
       .eq('key', 'pinned_products')
       .maybeSingle();
 
-    if (!error && settingData?.value) {
+    if (!settingErr && settingData?.value) {
       const val = typeof settingData.value === 'string' ? JSON.parse(settingData.value) : settingData.value;
       if (Array.isArray(val) && val.length > 0) {
-        const cleanIds = Array.from(new Set(val.map(String)));
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanIds));
+        for (const id of val) {
+          foundPinnedIds.add(String(id));
         }
-        return cleanIds;
       }
     }
   } catch {
     // site_settings table may not exist
   }
 
-  // Fallback to local storage if offline
+  // If database had pinned items, save to localStorage and return
+  if (foundPinnedIds.size > 0) {
+    const cleanList = Array.from(foundPinnedIds);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanList));
+      window.dispatchEvent(new CustomEvent('pinned_products_updated', { detail: cleanList }));
+    }
+    return cleanList;
+  }
+
+  // Fallback to local storage cache if offline or DB empty
   return getCachedPinnedProductIds();
 }
 
@@ -115,73 +167,36 @@ export async function savePinnedProductIds(
   ids: string[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const uniqueIds = Array.from(new Set(ids.map(String)));
+    const uniqueIds = Array.from(new Set(ids.map(String).filter(Boolean)));
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(uniqueIds));
+      window.dispatchEvent(new CustomEvent('pinned_products_updated', { detail: uniqueIds }));
     }
 
     let dbSuccess = false;
     let dbNotice = '';
 
-    // Primary Sync 1: Update variant_config JSONB on products table
-    // (Existing products in uniqueIds get is_pinned: true, all other products get is_pinned: false)
-    try {
-      const { data: allProds } = await supabase
-        .from('products')
-        .select('id, variant_config');
-
-      if (allProds && allProds.length > 0) {
-        for (const prod of allProds) {
-          const shouldBePinned = uniqueIds.includes(String(prod.id));
-          const currentCfg =
-            prod.variant_config && typeof prod.variant_config === 'object'
-              ? prod.variant_config
-              : typeof prod.variant_config === 'string'
-              ? JSON.parse(prod.variant_config)
-              : {};
-
-          const currentlyPinned = Boolean(currentCfg.is_pinned);
-          if (currentlyPinned !== shouldBePinned) {
-            currentCfg.is_pinned = shouldBePinned;
-            await supabase
-              .from('products')
-              .update({ variant_config: currentCfg })
-              .eq('id', prod.id);
-          }
-        }
-        dbSuccess = true;
-      }
-    } catch (e: any) {
-      console.warn('variant_config batch sync error:', e);
-    }
-
-    // Primary Sync 2: site_announcements table with active: false
+    // 1. Redundancy: site_announcements table
     try {
       const payload = `${DB_PREFIX_TAG}${JSON.stringify(uniqueIds)}`;
-      const { data: existing, error: selectErr } = await supabase
+      const { data: existingRows } = await supabase
         .from('site_announcements')
-        .select('id, message')
-        .ilike('message', '%PINNED_PRODUCTS%')
-        .limit(1);
+        .select('id')
+        .ilike('message', '%PINNED_PRODUCTS%');
 
-      if (!selectErr && existing && existing.length > 0) {
+      if (existingRows && existingRows.length > 0) {
+        const updateIds = existingRows.map((r: any) => r.id);
         const { error: updErr } = await supabase
           .from('site_announcements')
-          .update({
-            message: payload,
-            active: false,
-          })
-          .eq('id', existing[0].id);
+          .update({ message: payload, active: false })
+          .in('id', updateIds);
 
         if (!updErr) dbSuccess = true;
       } else {
         const { error: insErr } = await supabase
           .from('site_announcements')
-          .insert({
-            message: payload,
-            active: false,
-          });
+          .insert({ message: payload, active: false });
 
         if (!insErr) dbSuccess = true;
       }
@@ -189,7 +204,18 @@ export async function savePinnedProductIds(
       dbNotice = e?.message || String(e);
     }
 
-    // Secondary Sync 3: Update is_pinned column in products table if possible
+    // 2. Redundancy: site_settings upsert (if table exists)
+    try {
+      await supabase.from('site_settings').upsert({
+        key: 'pinned_products',
+        value: uniqueIds,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {
+      // Table may not exist
+    }
+
+    // 3. Best-effort: update is_pinned column in products table if possible
     try {
       await supabase
         .from('products')
@@ -204,25 +230,7 @@ export async function savePinnedProductIds(
       }
       dbSuccess = true;
     } catch {
-      // Column is_pinned may not exist yet in products table
-    }
-
-    // Secondary Sync 4: site_settings upsert (if table exists)
-    try {
-      await supabase.from('site_settings').upsert({
-        key: 'pinned_products',
-        value: uniqueIds,
-        updated_at: new Date().toISOString(),
-      });
-    } catch {
-      // Table may not exist
-    }
-
-    // Dispatch event for instant UI re-render across open pages
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('pinned_products_updated', { detail: uniqueIds })
-      );
+      // Column is_pinned may not exist yet
     }
 
     return { success: true, error: dbSuccess ? undefined : dbNotice };
@@ -231,74 +239,24 @@ export async function savePinnedProductIds(
   }
 }
 
-// Toggle pin status of a single product
-export async function togglePinProduct(
-  productId: string
-): Promise<{ success: boolean; is_pinned: boolean; ids: string[]; error?: string }> {
-  const current = getCachedPinnedProductIds();
-  const isCurrentlyPinned = current.includes(productId);
-  const updated = isCurrentlyPinned
-    ? current.filter((id) => id !== productId)
-    : [...current, productId];
-
-  const newStatus = !isCurrentlyPinned;
-
-  // 1. Immediately update product row variant_config JSONB (guaranteed to work in every Supabase DB)
-  try {
-    const { data: prodData } = await supabase
-      .from('products')
-      .select('variant_config')
-      .eq('id', productId)
-      .maybeSingle();
-
-    const cfg =
-      prodData?.variant_config && typeof prodData.variant_config === 'object'
-        ? prodData.variant_config
-        : typeof prodData?.variant_config === 'string'
-        ? JSON.parse(prodData.variant_config)
-        : {};
-
-    cfg.is_pinned = newStatus;
-
-    await supabase
-      .from('products')
-      .update({ variant_config: cfg })
-      .eq('id', productId);
-  } catch (err) {
-    console.warn('Failed to update product variant_config on pin toggle:', err);
-  }
-
-  // 2. Best effort: update is_pinned column directly if present
-  try {
-    await supabase
-      .from('products')
-      .update({ is_pinned: newStatus })
-      .eq('id', productId);
-  } catch {
-    // Safely ignore if column doesn't exist
-  }
-
-  const res = await savePinnedProductIds(updated);
-
-  return {
-    success: res.success,
-    is_pinned: newStatus,
-    ids: updated,
-    error: res.error,
-  };
-}
-
-// Explicitly set pin status of a product
+// Explicitly set pin status of a single product
 export async function setProductPinStatus(
   productId: string,
   isPinned: boolean
 ): Promise<{ success: boolean; is_pinned: boolean; ids: string[]; error?: string }> {
+  const normTarget = normalizeProductId(productId);
   const current = getCachedPinnedProductIds();
   const updated = isPinned
-    ? Array.from(new Set([...current, productId]))
-    : current.filter((id) => id !== productId);
+    ? Array.from(new Set([...current.filter((id) => normalizeProductId(id) !== normTarget), productId]))
+    : current.filter((id) => normalizeProductId(id) !== normTarget);
 
-  // 1. Immediately update product row variant_config JSONB
+  // 1. Immediately update local storage and notify listeners
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('pinned_products_updated', { detail: updated }));
+  }
+
+  // 2. Fast single-product update in Supabase products table (variant_config JSONB)
   try {
     const { data: prodData } = await supabase
       .from('products')
@@ -306,12 +264,16 @@ export async function setProductPinStatus(
       .eq('id', productId)
       .maybeSingle();
 
-    const cfg =
-      prodData?.variant_config && typeof prodData.variant_config === 'object'
-        ? prodData.variant_config
-        : typeof prodData?.variant_config === 'string'
-        ? JSON.parse(prodData.variant_config)
-        : {};
+    let cfg = prodData?.variant_config;
+    if (typeof cfg === 'string') {
+      try {
+        cfg = JSON.parse(cfg);
+      } catch {
+        cfg = {};
+      }
+    } else if (!cfg || typeof cfg !== 'object') {
+      cfg = {};
+    }
 
     cfg.is_pinned = isPinned;
 
@@ -320,19 +282,20 @@ export async function setProductPinStatus(
       .update({ variant_config: cfg })
       .eq('id', productId);
   } catch (err) {
-    console.warn('Failed to update product variant_config on setProductPinStatus:', err);
+    console.warn('Failed to update product variant_config on pin set:', err);
   }
 
-  // 2. Best effort: update is_pinned column
+  // 3. Best-effort update of native is_pinned column
   try {
     await supabase
       .from('products')
       .update({ is_pinned: isPinned })
       .eq('id', productId);
   } catch {
-    // Safely ignore if column doesn't exist
+    // Safely ignore if column does not exist
   }
 
+  // 4. Sync full array to backup storage (site_announcements & site_settings)
   const res = await savePinnedProductIds(updated);
 
   return {
@@ -341,4 +304,16 @@ export async function setProductPinStatus(
     ids: updated,
     error: res.error,
   };
+}
+
+// Toggle pin status of a single product
+export async function togglePinProduct(
+  productId: string
+): Promise<{ success: boolean; is_pinned: boolean; ids: string[]; error?: string }> {
+  const normTarget = normalizeProductId(productId);
+  const current = getCachedPinnedProductIds();
+  const isCurrentlyPinned = current.some((id) => normalizeProductId(id) === normTarget);
+  const newStatus = !isCurrentlyPinned;
+
+  return setProductPinStatus(productId, newStatus);
 }
