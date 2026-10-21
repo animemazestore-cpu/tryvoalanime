@@ -184,23 +184,37 @@ CREATE POLICY "Users can manage own wishlist" ON public.wishlist_items FOR ALL U
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   user_name TEXT NOT NULL DEFAULT 'Anonymous',
   rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
   review_text TEXT NOT NULL DEFAULT '',
   review_images JSONB NOT NULL DEFAULT '[]',
   verified_purchase BOOLEAN NOT NULL DEFAULT false,
-  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('APPROVED','PENDING','REJECTED')),
+  status TEXT NOT NULL DEFAULT 'APPROVED' CHECK (status IN ('APPROVED','PENDING','REJECTED')),
   likes_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE public.reviews ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view approved reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Authenticated users can submit reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Anyone can insert reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Admin can manage reviews" ON public.reviews;
-CREATE POLICY "Anyone can view approved reviews" ON public.reviews FOR SELECT USING (status = 'APPROVED' OR auth.uid() = user_id);
-CREATE POLICY "Authenticated users can submit reviews" ON public.reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Anyone can view approved reviews" ON public.reviews FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert reviews" ON public.reviews FOR INSERT WITH CHECK (true);
 CREATE POLICY "Admin can manage reviews" ON public.reviews FOR ALL USING (true) WITH CHECK (true);
+
+-- SITE SETTINGS (Key-Value Store for Global Configs, Thumbnails & Cross-Device Sync)
+CREATE TABLE IF NOT EXISTS public.site_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view site_settings" ON public.site_settings;
+DROP POLICY IF EXISTS "Anyone can manage site_settings" ON public.site_settings;
+CREATE POLICY "Anyone can view site_settings" ON public.site_settings FOR SELECT USING (true);
+CREATE POLICY "Anyone can manage site_settings" ON public.site_settings FOR ALL USING (true) WITH CHECK (true);
 
 -- PRODUCT QUESTIONS
 CREATE TABLE IF NOT EXISTS public.product_questions (

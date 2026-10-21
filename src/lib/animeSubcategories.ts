@@ -113,6 +113,7 @@ export const DEFAULT_ANIME_SERIES: AnimeSeriesEntry[] = [
 const THUMBNAILS_STORAGE_KEY = 'tryvoal_anime_thumbnails';
 const CUSTOM_SERIES_STORAGE_KEY = 'tryvoal_custom_anime_series';
 const DB_PREFIX_TAG = '[ANIME_THUMBNAILS_JSON]:';
+const DB_CUSTOM_SERIES_PREFIX_TAG = '[ANIME_CUSTOM_SERIES_JSON]:';
 
 // Get cached thumbnails overrides map (id -> imageUrl)
 export function getCachedAnimeThumbnails(): Record<string, string> {
@@ -167,12 +168,12 @@ export function getAllAnimeSeries(
   return Array.from(seriesMap.values());
 }
 
-// Fetch thumbnails from Supabase to stay updated across devices
+// Fetch thumbnails from Supabase to stay updated across all devices
 export async function fetchAnimeThumbnails(): Promise<Record<string, string>> {
   let overrides = getCachedAnimeThumbnails();
 
+  // 1. Check site_settings table if it exists
   try {
-    // 1. Check site_settings table
     const { data: settingData, error } = await supabase
       .from('site_settings')
       .select('value')
@@ -183,38 +184,44 @@ export async function fetchAnimeThumbnails(): Promise<Record<string, string>> {
       const val = typeof settingData.value === 'string' ? JSON.parse(settingData.value) : settingData.value;
       if (val && typeof val === 'object') {
         overrides = { ...overrides, ...val };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(THUMBNAILS_STORAGE_KEY, JSON.stringify(overrides));
-        }
-        return overrides;
       }
     }
   } catch {
-    // fallback to announcements table
+    // Continue to announcements table
   }
 
+  // 2. Check site_announcements table (Guaranteed cross-device sync)
   try {
-    // 2. Check site_announcements table
     const { data: annData } = await supabase
       .from('site_announcements')
-      .select('message')
-      .like('message', `${DB_PREFIX_TAG}%`)
+      .select('id, message, created_at')
+      .ilike('message', '%ANIME_THUMBNAILS%')
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(5);
 
-    if (annData && annData.length > 0 && annData[0].message) {
-      const jsonStr = annData[0].message.replace(DB_PREFIX_TAG, '');
-      const parsed = JSON.parse(jsonStr);
-      if (parsed && typeof parsed === 'object') {
-        overrides = { ...overrides, ...parsed };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(THUMBNAILS_STORAGE_KEY, JSON.stringify(overrides));
+    if (annData && annData.length > 0) {
+      for (const row of annData) {
+        if (!row.message) continue;
+        const start = row.message.indexOf('{');
+        const end = row.message.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end > start) {
+          try {
+            const parsed = JSON.parse(row.message.substring(start, end + 1));
+            if (parsed && typeof parsed === 'object') {
+              overrides = { ...overrides, ...parsed };
+              break; // Newest found
+            }
+          } catch {}
         }
-        return overrides;
       }
     }
   } catch (err) {
-    console.warn('Could not fetch anime thumbnails from Supabase:', err);
+    console.warn('Could not fetch anime thumbnails from Supabase announcements:', err);
+  }
+
+  // Cache to localStorage for instant local access
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(THUMBNAILS_STORAGE_KEY, JSON.stringify(overrides));
   }
 
   return overrides;
@@ -242,11 +249,10 @@ export async function saveAnimeSeriesThumbnail(
       localStorage.setItem(CUSTOM_SERIES_STORAGE_KEY, JSON.stringify(updatedCustom));
     }
 
-    // Sync to Supabase
     let dbSuccess = false;
     let dbNotice = '';
 
-    // Attempt 1: site_settings
+    // Attempt 1: site_settings table (if available)
     try {
       const { error } = await supabase.from('site_settings').upsert({
         key: 'anime_thumbnails',
@@ -254,38 +260,41 @@ export async function saveAnimeSeriesThumbnail(
         updated_at: new Date().toISOString(),
       });
       if (!error) dbSuccess = true;
-      else dbNotice = error.message;
     } catch (e: any) {
-      dbNotice = e?.message || String(e);
+      // Continue to announcements
     }
 
-    // Attempt 2: site_announcements backup
+    // Attempt 2: site_announcements table (100% universal across devices)
     try {
       const payload = `${DB_PREFIX_TAG}${JSON.stringify(updated)}`;
       const { data: existing } = await supabase
         .from('site_announcements')
         .select('id')
-        .like('message', `${DB_PREFIX_TAG}%`)
+        .ilike('message', '%ANIME_THUMBNAILS%')
         .limit(1);
 
       if (existing && existing.length > 0) {
-        await supabase
+        const { error: updErr } = await supabase
           .from('site_announcements')
           .update({
             message: payload,
-            is_active: false,
+            active: false, // Correct column is 'active', NOT 'is_active'
           })
           .eq('id', existing[0].id);
-        dbSuccess = true;
+
+        if (!updErr) dbSuccess = true;
+        else dbNotice = updErr.message;
       } else {
-        await supabase.from('site_announcements').insert({
+        const { error: insErr } = await supabase.from('site_announcements').insert({
           message: payload,
-          is_active: false,
+          active: false, // Correct column is 'active', NOT 'is_active'
         });
-        dbSuccess = true;
+
+        if (!insErr) dbSuccess = true;
+        else dbNotice = insErr.message;
       }
-    } catch (e) {
-      // ignore backup error
+    } catch (e: any) {
+      dbNotice = e?.message || String(e);
     }
 
     // Dispatch custom event so open pages / components update instantly
@@ -297,4 +306,113 @@ export async function saveAnimeSeriesThumbnail(
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }
+}
+
+// Fetch custom anime series from Supabase for cross-device sync
+export async function fetchCustomAnimeSeriesFromDB(): Promise<AnimeSeriesEntry[]> {
+  let customList = getCachedCustomAnimeSeries();
+
+  // 1. Try site_settings
+  try {
+    const { data: settingData, error } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'custom_anime_series')
+      .maybeSingle();
+
+    if (!error && settingData?.value) {
+      const val = typeof settingData.value === 'string' ? JSON.parse(settingData.value) : settingData.value;
+      if (Array.isArray(val)) {
+        customList = val;
+      }
+    }
+  } catch {}
+
+  // 2. Try site_announcements
+  try {
+    const { data: annData } = await supabase
+      .from('site_announcements')
+      .select('id, message, created_at')
+      .ilike('message', '%ANIME_CUSTOM_SERIES%')
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (annData && annData.length > 0) {
+      for (const row of annData) {
+        if (!row.message) continue;
+        const start = row.message.indexOf('[');
+        const end = row.message.lastIndexOf(']');
+        if (start !== -1 && end !== -1 && end > start) {
+          try {
+            const parsed = JSON.parse(row.message.substring(start, end + 1));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              customList = parsed;
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CUSTOM_SERIES_STORAGE_KEY, JSON.stringify(customList));
+  }
+
+  return customList;
+}
+
+// Save custom anime series list to Supabase for cross-device sync
+export async function saveCustomAnimeSeriesList(
+  seriesList: AnimeSeriesEntry[]
+): Promise<{ success: boolean; error?: string }> {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CUSTOM_SERIES_STORAGE_KEY, JSON.stringify(seriesList));
+  }
+
+  let dbSuccess = false;
+  let dbNotice = '';
+
+  // 1. Try site_settings
+  try {
+    const { error } = await supabase.from('site_settings').upsert({
+      key: 'custom_anime_series',
+      value: seriesList,
+      updated_at: new Date().toISOString(),
+    });
+    if (!error) dbSuccess = true;
+  } catch {}
+
+  // 2. Try site_announcements
+  try {
+    const payload = `${DB_CUSTOM_SERIES_PREFIX_TAG}${JSON.stringify(seriesList)}`;
+    const { data: existing } = await supabase
+      .from('site_announcements')
+      .select('id')
+      .ilike('message', '%ANIME_CUSTOM_SERIES%')
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      const { error: updErr } = await supabase
+        .from('site_announcements')
+        .update({
+          message: payload,
+          active: false,
+        })
+        .eq('id', existing[0].id);
+      if (!updErr) dbSuccess = true;
+      else dbNotice = updErr.message;
+    } else {
+      const { error: insErr } = await supabase.from('site_announcements').insert({
+        message: payload,
+        active: false,
+      });
+      if (!insErr) dbSuccess = true;
+      else dbNotice = insErr.message;
+    }
+  } catch (err: any) {
+    dbNotice = err?.message || String(err);
+  }
+
+  return { success: true, error: dbSuccess ? undefined : dbNotice };
 }

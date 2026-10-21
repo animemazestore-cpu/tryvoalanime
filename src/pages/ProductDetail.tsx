@@ -13,6 +13,7 @@ import { ProductImage } from '../components/product/ProductImage';
 import { ProductImageGallery } from '../components/product/ProductImageGallery';
 import { ProductDescription } from '../components/product/ProductDescription';
 import { findProductBySlug } from '../lib/catalogQueries';
+import { fetchReviewsMultiChannel } from '../lib/reviewSync';
 
 export const ProductDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -150,47 +151,20 @@ export const ProductDetail: React.FC = () => {
 
     const fetchReviewsAndQuestions = async () => {
       try {
-        // Fetch reviews from Supabase
+        // Fetch reviews with multi-channel cross-device sync (reviews table + announcements backup + settings + local)
         let dbReviewsList: any[] = [];
         try {
-          const { data: dbReviews, error: revError } = await supabase
-            .from('reviews')
-            .select('*')
-            .eq('product_id', product.id)
-            .eq('status', 'APPROVED');
-
-          if (!revError && dbReviews) {
-            dbReviewsList = dbReviews.map((r: any) => ({
-              ...r,
-              review_images: Array.isArray(r.review_images) ? r.review_images : []
-            }));
-          }
-        } catch (revFetchErr) {
-          console.warn('Could not fetch reviews from Supabase, relying on local sync:', revFetchErr);
+          const allFetchedReviews = await fetchReviewsMultiChannel(product.id);
+          const approvedForProduct = allFetchedReviews.filter(
+            (r: any) => (r.status === 'APPROVED' || !r.status)
+          );
+          dbReviewsList = approvedForProduct.map((r: any) => ({
+            ...r,
+            review_images: Array.isArray(r.review_images) ? r.review_images : []
+          }));
+        } catch (fetchErr) {
+          console.warn('Error fetching reviews:', fetchErr);
         }
-
-        // Hydrate from local custom reviews fallback
-        try {
-          const localStored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
-          if (localStored) {
-            const parsed = JSON.parse(localStored);
-            if (Array.isArray(parsed)) {
-              const existingIds = new Set(dbReviewsList.map((r: any) => String(r.id)));
-              for (const lr of parsed) {
-                if (
-                  String(lr.product_id) === String(product.id) &&
-                  (lr.status === 'APPROVED' || !lr.status) &&
-                  !existingIds.has(String(lr.id))
-                ) {
-                  dbReviewsList.push({
-                    ...lr,
-                    review_images: Array.isArray(lr.review_images) ? lr.review_images : []
-                  });
-                }
-              }
-            }
-          }
-        } catch (_) {}
 
         // Hydrate likes
         const localLikes = JSON.parse(localStorage.getItem('animemaze_local_review_likes') || '[]');

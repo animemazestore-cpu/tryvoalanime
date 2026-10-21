@@ -12,7 +12,8 @@ import { ProductVariantEditor } from '../components/admin/ProductVariantEditor';
 import type { OptionDraft, VariantDraft } from '../components/admin/ProductVariantEditor';
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
-import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, setProductPinStatus, isProductEffectivelyPinned } from '../lib/catalogQueries';
+import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, fetchCustomAnimeSeriesFromDB, saveCustomAnimeSeriesList, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, setProductPinStatus, isProductEffectivelyPinned } from '../lib/catalogQueries';
+import { fetchReviewsMultiChannel, syncReviewsMultiChannel, updateReviewStatusMultiChannel, deleteReviewMultiChannel } from '../lib/reviewSync';
 import { DEFAULT_HERO_CONFIG, getCachedHeroConfig, fetchHeroConfig, saveHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
 import type { QikinkConfig } from '../lib/qikink';
@@ -601,9 +602,10 @@ export const Admin: React.FC = () => {
           );
           setCustomAnimeList(updatedCustom);
           localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updatedCustom));
+          await saveCustomAnimeSeriesList(updatedCustom);
         }
 
-        alert(`Sub-category "${animeForm.label.trim()}" thumbnail updated successfully!`);
+        alert(`Sub-category "${animeForm.label.trim()}" thumbnail updated and synced across all devices!`);
       } else {
         // 2. Creating a new custom anime series
         const newEntry: AnimeSeriesEntry = {
@@ -617,13 +619,14 @@ export const Admin: React.FC = () => {
         const updated = [...customAnimeList.filter((a) => a.id !== slug), newEntry];
         setCustomAnimeList(updated);
         localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
+        await saveCustomAnimeSeriesList(updated);
 
         if (imageUrl) {
           await saveAnimeSeriesThumbnail(slug, imageUrl);
           setAnimeThumbnails((prev) => ({ ...prev, [slug]: imageUrl }));
         }
 
-        alert(`Anime sub-category "${newEntry.label}" added successfully!`);
+        alert(`Anime sub-category "${newEntry.label}" added and synced across all devices!`);
       }
 
       setAnimeForm({ label: '', id: '', short: '', image_url: '' });
@@ -636,11 +639,12 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleDeleteAnimeSeries = (id: string) => {
+  const handleDeleteAnimeSeries = async (id: string) => {
     if (!confirm('Delete this custom anime sub-category?')) return;
     const updated = customAnimeList.filter(a => a.id !== id);
     setCustomAnimeList(updated);
     localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
+    await saveCustomAnimeSeriesList(updated);
   };
 
   // Fetch / sync replacement requests from database
@@ -1059,36 +1063,27 @@ export const Admin: React.FC = () => {
         setQuestions([]);
       }
 
-      // 5. Fetch reviews
+      // 5. Fetch reviews with multi-channel cross-device sync
       try {
-        let allReviews: Review[] = [];
-        const { data: dbReviews, error: revError } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
-        if (!revError && dbReviews) {
-          allReviews = dbReviews as Review[];
-        }
-
-        // Hydrate from localStorage custom reviews
-        try {
-          const localStored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
-          if (localStored) {
-            const parsed = JSON.parse(localStored);
-            if (Array.isArray(parsed)) {
-              const existingIds = new Set(allReviews.map((r) => String(r.id)));
-              for (const lr of parsed) {
-                if (!existingIds.has(String(lr.id))) {
-                  allReviews.push(lr);
-                }
-              }
-            }
-          }
-        } catch (_) {}
-
-        // Sort descending by date
-        allReviews.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        const allReviews = await fetchReviewsMultiChannel();
         setReviews(allReviews);
       } catch (err) {
         console.error('Error loading reviews:', err);
         setReviews([]);
+      }
+
+      // 5b. Sync anime subcategories & thumbnails from database for cross-device consistency
+      try {
+        const syncedThumbs = await fetchAnimeThumbnails();
+        if (syncedThumbs && Object.keys(syncedThumbs).length > 0) {
+          setAnimeThumbnails(syncedThumbs);
+        }
+        const syncedCustom = await fetchCustomAnimeSeriesFromDB();
+        if (syncedCustom && syncedCustom.length > 0) {
+          setCustomAnimeList(syncedCustom);
+        }
+      } catch (e) {
+        console.warn('Anime series & thumbnails sync warning:', e);
       }
 
       // 6. Fetch subscribers
@@ -2341,41 +2336,21 @@ export const Admin: React.FC = () => {
         };
       });
 
-      // 4. Batch Insert into Supabase (chunks of 40)
-      const chunkSize = 40;
-      let insertedCount = 0;
-      for (let i = 0; i < generatedReviews.length; i += chunkSize) {
-        const chunk = generatedReviews.slice(i, i + chunkSize);
-        try {
-          const { error } = await supabase.from('reviews').insert(chunk);
-          if (error) {
-            console.warn('Batch DB insert warning, will fallback to local cache:', error);
-          }
-        } catch (dbErr) {
-          console.warn('Batch DB insert exception:', dbErr);
-        }
-        insertedCount += chunk.length;
-        setImportProgress({ current: insertedCount, total: totalReviews });
-      }
+      // 4. Multi-Channel Database Sync (reviews table + universal site_announcements backup broadcast + settings)
+      setImportProgress({ current: Math.floor(totalReviews / 2), total: totalReviews });
+      const syncResult = await syncReviewsMultiChannel(generatedReviews);
+      setImportProgress({ current: totalReviews, total: totalReviews });
 
-      // 5. Also persist in localStorage custom reviews for instant offline & client-side sync
-      try {
-        const stored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
-        const existing: Review[] = stored ? JSON.parse(stored) : [];
-        const existingIds = new Set(existing.map(r => r.id));
-        const merged = [
-          ...generatedReviews.filter(r => !existingIds.has(r.id)),
-          ...existing
-        ];
-        localStorage.setItem('tryvoal_custom_reviews', JSON.stringify(merged));
-      } catch (localErr) {
-        console.warn('Local storage review save warning:', localErr);
-      }
-
-      // 6. Update Admin State
+      // 5. Update Admin State
       await loadAdminData();
 
-      alert(`🎉 Successfully imported ${totalReviews} reviews!\n\n• Target Products: ${numProducts}\n• Distribution: ~${reviewsPerProductFloor} reviews per product\n• Zero Repetition: Every review is uniquely assigned.\n• Ratings: 3 to 5 stars strictly enforced.`);
+      const syncStatusText = syncResult.directDbSuccess 
+        ? '✓ Synced to Supabase database.' 
+        : syncResult.backupSynced 
+        ? '✓ Synced to Supabase cloud channel (visible on all devices).' 
+        : '✓ Saved locally.';
+
+      alert(`🎉 Successfully imported ${totalReviews} reviews!\n\n• Target Products: ${numProducts}\n• Distribution: ~${reviewsPerProductFloor} unique reviews per product\n• Zero Repetition: Every review is uniquely assigned.\n• Cloud Sync: ${syncStatusText}`);
       
       // Reset Modal
       setIsReviewImportModalOpen(false);
@@ -2391,31 +2366,12 @@ export const Admin: React.FC = () => {
     }
   };
 
-  // --- Actions: Review Moderation ---
+  // --- Actions: Review Moderation with Cross-Device Sync ---
   const handleModerateReview = async (reviewId: string, status: 'APPROVED' | 'REJECTED') => {
     try {
-      try {
-        const { error } = await supabase
-          .from('reviews')
-          .update({ status })
-          .eq('id', reviewId);
-        if (error) console.warn('DB update review status warning:', error);
-      } catch (dbErr) {
-        console.warn('DB update review status exception:', dbErr);
-      }
-
-      // Sync with localStorage
-      try {
-        const stored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const updated = parsed.map((r: any) => r.id === reviewId ? { ...r, status } : r);
-          localStorage.setItem('tryvoal_custom_reviews', JSON.stringify(updated));
-        }
-      } catch (_) {}
-
+      await updateReviewStatusMultiChannel(reviewId, status);
       setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status } : r));
-      alert(`Review status updated to ${status}.`);
+      alert(`Review status updated to ${status} and synced across all devices.`);
     } catch (err: any) {
       console.error('Review moderation failed:', err);
       alert('Failed to update review status: ' + (err.message || err));
@@ -2425,25 +2381,9 @@ export const Admin: React.FC = () => {
   const handleDeleteReview = async (id: string) => {
     if (!window.confirm('Delete this review permanently?')) return;
     try {
-      try {
-        const { error } = await supabase.from('reviews').delete().eq('id', id);
-        if (error) console.warn('DB delete review warning:', error);
-      } catch (dbErr) {
-        console.warn('DB delete review exception:', dbErr);
-      }
-
-      // Sync with localStorage
-      try {
-        const stored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const updated = parsed.filter((r: any) => r.id !== id);
-          localStorage.setItem('tryvoal_custom_reviews', JSON.stringify(updated));
-        }
-      } catch (_) {}
-
+      await deleteReviewMultiChannel(id);
       setReviews(prev => prev.filter(r => r.id !== id));
-      alert('Review deleted successfully!');
+      alert('Review deleted permanently across all devices!');
     } catch (err: any) {
       console.error('Failed to delete review:', err);
       alert('Failed to delete review: ' + (err.message || err));
