@@ -151,18 +151,46 @@ export const ProductDetail: React.FC = () => {
     const fetchReviewsAndQuestions = async () => {
       try {
         // Fetch reviews from Supabase
-        const { data: dbReviews, error: revError } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('product_id', product.id)
-          .eq('status', 'APPROVED');
+        let dbReviewsList: any[] = [];
+        try {
+          const { data: dbReviews, error: revError } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('product_id', product.id)
+            .eq('status', 'APPROVED');
 
-        if (revError) throw revError;
+          if (!revError && dbReviews) {
+            dbReviewsList = dbReviews.map((r: any) => ({
+              ...r,
+              review_images: Array.isArray(r.review_images) ? r.review_images : []
+            }));
+          }
+        } catch (revFetchErr) {
+          console.warn('Could not fetch reviews from Supabase, relying on local sync:', revFetchErr);
+        }
 
-        const dbReviewsList = dbReviews ? dbReviews.map((r: any) => ({
-          ...r,
-          review_images: Array.isArray(r.review_images) ? r.review_images : []
-        })) : [];
+        // Hydrate from local custom reviews fallback
+        try {
+          const localStored = localStorage.getItem('tryvoal_custom_reviews') || localStorage.getItem('elitebath_custom_reviews');
+          if (localStored) {
+            const parsed = JSON.parse(localStored);
+            if (Array.isArray(parsed)) {
+              const existingIds = new Set(dbReviewsList.map((r: any) => String(r.id)));
+              for (const lr of parsed) {
+                if (
+                  String(lr.product_id) === String(product.id) &&
+                  (lr.status === 'APPROVED' || !lr.status) &&
+                  !existingIds.has(String(lr.id))
+                ) {
+                  dbReviewsList.push({
+                    ...lr,
+                    review_images: Array.isArray(lr.review_images) ? lr.review_images : []
+                  });
+                }
+              }
+            }
+          }
+        } catch (_) {}
 
         // Hydrate likes
         const localLikes = JSON.parse(localStorage.getItem('animemaze_local_review_likes') || '[]');
