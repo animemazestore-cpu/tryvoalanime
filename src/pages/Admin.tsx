@@ -12,7 +12,7 @@ import { ProductVariantEditor } from '../components/admin/ProductVariantEditor';
 import type { OptionDraft, VariantDraft } from '../components/admin/ProductVariantEditor';
 import { ImageUploadZone } from '../components/admin/ImageUploadZone';
 import { deleteProductImagesFromStorage } from '../lib/storage';
-import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, fetchCustomAnimeSeriesFromDB, saveCustomAnimeSeriesList, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, setProductPinStatus, isProductEffectivelyPinned } from '../lib/catalogQueries';
+import { FALLBACK_CATEGORIES, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, fetchCustomAnimeSeriesFromDB, saveCustomAnimeSeriesList, syncAllAnimeSubcategoriesToCloud, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, setProductPinStatus, isProductEffectivelyPinned } from '../lib/catalogQueries';
 import { fetchReviewsMultiChannel, syncReviewsMultiChannel, updateReviewStatusMultiChannel, deleteReviewMultiChannel } from '../lib/reviewSync';
 import { DEFAULT_HERO_CONFIG, getCachedHeroConfig, fetchHeroConfig, saveHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
 import { dispatchOrderToQikink, getQikinkConfig, saveQikinkConfig, testQikinkConnection, checkQikinkOrderStatus } from '../lib/qikink';
@@ -551,6 +551,24 @@ export const Admin: React.FC = () => {
     setIsAnimeModalOpen(true);
   };
 
+  const [isSyncingSubcategories, setIsSyncingSubcategories] = useState(false);
+
+  const handleSyncSubcategoriesToCloud = async () => {
+    setIsSyncingSubcategories(true);
+    try {
+      const res = await syncAllAnimeSubcategoriesToCloud();
+      if (res.dbSynced) {
+        alert(`🎉 Sub-Categories Cloud Sync Successful!\n\n• ${res.totalThumbnails} franchise thumbnails pushed to database.\n• ${res.totalCustomSeries} custom anime series synchronized.\n• Status: Active across all devices and visitor sessions.`);
+      } else {
+        alert(`Sub-categories saved locally.\n\nDatabase notice: ${res.errorNotice || 'Check Supabase connection'}`);
+      }
+    } catch (err: any) {
+      alert(`Sync error: ${err?.message || err}`);
+    } finally {
+      setIsSyncingSubcategories(false);
+    }
+  };
+
   const handleSaveAnimeSeries = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!animeForm.label.trim()) return;
@@ -567,6 +585,7 @@ export const Admin: React.FC = () => {
         (editingAnimeSeries?.short ?? animeForm.label.trim().slice(0, 3).toUpperCase());
 
       const imageUrl = animeForm.image_url.trim();
+      let syncNotice = '';
 
       // 1. If editing an existing series
       if (editingAnimeSeries) {
@@ -574,9 +593,9 @@ export const Admin: React.FC = () => {
         if (imageUrl) {
           const res = await saveAnimeSeriesThumbnail(slug, imageUrl);
           setAnimeThumbnails((prev) => ({ ...prev, [slug]: imageUrl }));
-          if (res.error) {
-            console.warn('Anime thumbnail database sync notice:', res.error);
-          }
+          syncNotice = res.dbSynced
+            ? 'Synced directly to database and visible across all devices.'
+            : (res.error ? `Saved locally. (Cloud sync notice: ${res.error})` : 'Saved locally & cloud broadcast active.');
         }
 
         // If it's a custom series, update name/code in custom list
@@ -602,10 +621,13 @@ export const Admin: React.FC = () => {
           );
           setCustomAnimeList(updatedCustom);
           localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updatedCustom));
-          await saveCustomAnimeSeriesList(updatedCustom);
+          const customRes = await saveCustomAnimeSeriesList(updatedCustom);
+          if (customRes.dbSynced && !syncNotice) {
+            syncNotice = 'Custom universe synced to database across all devices.';
+          }
         }
 
-        alert(`Sub-category "${animeForm.label.trim()}" thumbnail updated and synced across all devices!`);
+        alert(`🎉 Sub-category "${animeForm.label.trim()}" thumbnail updated!\n\n• ${syncNotice || 'Updated successfully'}`);
       } else {
         // 2. Creating a new custom anime series
         const newEntry: AnimeSeriesEntry = {
@@ -619,14 +641,17 @@ export const Admin: React.FC = () => {
         const updated = [...customAnimeList.filter((a) => a.id !== slug), newEntry];
         setCustomAnimeList(updated);
         localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(updated));
-        await saveCustomAnimeSeriesList(updated);
+        const customRes = await saveCustomAnimeSeriesList(updated);
 
         if (imageUrl) {
-          await saveAnimeSeriesThumbnail(slug, imageUrl);
+          const res = await saveAnimeSeriesThumbnail(slug, imageUrl);
           setAnimeThumbnails((prev) => ({ ...prev, [slug]: imageUrl }));
+          syncNotice = res.dbSynced || customRes.dbSynced
+            ? 'Synced directly to database across all devices.'
+            : 'Saved locally & broadcast active.';
         }
 
-        alert(`Anime sub-category "${newEntry.label}" added and synced across all devices!`);
+        alert(`🎉 Anime sub-category "${newEntry.label}" added!\n\n• ${syncNotice || 'Saved and broadcast to all devices'}`);
       }
 
       setAnimeForm({ label: '', id: '', short: '', image_url: '' });
@@ -3346,15 +3371,30 @@ export const Admin: React.FC = () => {
               {/* VIEW 2: Anime Sub-Categories / Universes (JJK, Bleach, Naruto, etc.) */}
               {activeCategoryView === 'subcategories' && (
                 <div className="space-y-4">
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 flex items-start gap-3">
-                    <Tag className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-sm text-gray-900 mb-1">
-                        Anime Franchises & Universes (Sub-Categories)
-                      </p>
-                      <p className="text-gray-600 leading-relaxed">
-                        These are the anime franchises (e.g. <strong>Jujutsu Kaisen (JJK)</strong>, <strong>Bleach</strong>, <strong>Naruto</strong>, <strong>One Piece</strong>) used across Tryvoal for quick customer filtering, anime pills on the storefront, and product tagging. You can tag any product by setting its <strong>Anime Universe / Franchise</strong> field in the product editor.
-                      </p>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <Tag className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-sm text-gray-900 mb-1">
+                          Anime Franchises & Universes (Sub-Categories)
+                        </p>
+                        <p className="text-gray-600 leading-relaxed max-w-2xl">
+                          These are the anime franchises (e.g. <strong>Jujutsu Kaisen (JJK)</strong>, <strong>Bleach</strong>, <strong>Naruto</strong>, <strong>One Piece</strong>) used across Tryvoal for storefront filtering, product tagging, and home screen cards. Changing thumbnails updates across all devices and visitor sessions.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleSyncSubcategoriesToCloud}
+                        disabled={isSyncingSubcategories}
+                        className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-sm transition"
+                        title="Broadcast all anime franchise thumbnails to database across all devices"
+                      >
+                        <RefreshCcw className={`h-4 w-4 ${isSyncingSubcategories ? 'animate-spin' : ''}`} />
+                        <span>{isSyncingSubcategories ? 'Syncing...' : 'Sync Sub-Categories to Cloud DB'}</span>
+                      </button>
                     </div>
                   </div>
 
@@ -3372,6 +3412,7 @@ export const Admin: React.FC = () => {
                         );
                       }).length;
                       const isCustom = customAnimeList.some((c) => c.id === series.id);
+                      const hasCustomThumb = Boolean(animeThumbnails[series.id]);
                       const thumbUrl = animeThumbnails[series.id] || series.image_url || '/placeholder.jpg';
 
                       return (
@@ -3390,13 +3431,18 @@ export const Admin: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <p className="font-bold text-gray-900 text-sm truncate">{series.label}</p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                 <span className="text-[11px] text-gray-500 font-mono">
                                   Slug: {series.id}
                                 </span>
                                 <span className="text-[11px] font-bold text-primary">
                                   • {count} Product{count === 1 ? '' : 's'}
                                 </span>
+                                {hasCustomThumb && (
+                                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    Custom Thumbnail
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -3463,6 +3509,7 @@ export const Admin: React.FC = () => {
                             );
                           }).length;
                           const isCustom = customAnimeList.some((c) => c.id === series.id);
+                          const hasCustomThumb = Boolean(animeThumbnails[series.id]);
                           const thumbUrl = animeThumbnails[series.id] || series.image_url || '/placeholder.jpg';
 
                           return (
@@ -3476,6 +3523,11 @@ export const Admin: React.FC = () => {
                                     onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.jpg'; }}
                                   />
                                 </div>
+                                {hasCustomThumb && (
+                                  <span className="inline-block mt-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                    Custom DB
+                                  </span>
+                                )}
                               </td>
                               <td className="px-6 py-3 font-bold text-gray-900">
                                 <div className="flex items-center space-x-2">

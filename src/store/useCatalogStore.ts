@@ -65,13 +65,52 @@ async function fetchCategoriesFromNetwork(): Promise<Category[]> {
       supabase.from('categories').select(CATEGORY_FIELDS).order('name')
     );
     if (error) throw error;
+
+    // Process and extract anime subcategory thumbnails & custom series metadata rows
+    if (data && data.length > 0 && typeof window !== 'undefined') {
+      try {
+        let animeThumbUpdated = false;
+        const currentThumbnails = JSON.parse(localStorage.getItem('tryvoal_anime_thumbnails') || '{}');
+        for (const row of data as any[]) {
+          if (!row.name || !row.image_url) continue;
+          if (row.name === '__tryvoal_anime_thumbnails__') {
+            try {
+              const parsed = JSON.parse(row.image_url);
+              if (parsed && typeof parsed === 'object') {
+                Object.assign(currentThumbnails, parsed);
+                animeThumbUpdated = true;
+              }
+            } catch {}
+          } else if (row.name.startsWith('__subcat_') && row.name.endsWith('__')) {
+            const sId = row.name.slice(9, -2);
+            if (sId && row.image_url.trim()) {
+              currentThumbnails[sId] = row.image_url.trim();
+              animeThumbUpdated = true;
+            }
+          } else if (row.name === '__tryvoal_custom_anime_series__') {
+            try {
+              const parsedSeries = JSON.parse(row.image_url);
+              if (Array.isArray(parsedSeries) && parsedSeries.length > 0) {
+                localStorage.setItem('tryvoal_custom_anime_series', JSON.stringify(parsedSeries));
+                window.dispatchEvent(new CustomEvent('anime_custom_series_updated', { detail: parsedSeries }));
+              }
+            } catch {}
+          }
+        }
+        if (animeThumbUpdated) {
+          localStorage.setItem('tryvoal_anime_thumbnails', JSON.stringify(currentThumbnails));
+          window.dispatchEvent(new CustomEvent('anime_thumbnails_updated', { detail: currentThumbnails }));
+        }
+      } catch {}
+    }
+
     const localCustomCats: Category[] =
       typeof window !== 'undefined'
         ? JSON.parse(localStorage.getItem('elitebath_custom_categories') || '[]')
         : [];
 
     const dbCats = data && data.length > 0 ? (data as Category[])
-      .filter((c) => !deletedCatIds.includes(c.id))
+      .filter((c) => !deletedCatIds.includes(c.id) && !c.name.startsWith('__'))
       .map((c) => {
         const customOverride = localCustomCats.find(
           (lc) => lc.id === c.id || lc.name.toLowerCase() === c.name.toLowerCase()

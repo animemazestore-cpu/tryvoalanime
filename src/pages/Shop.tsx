@@ -19,7 +19,7 @@ import { useCatalogStore } from '../store/useCatalogStore';
 import { Button } from '../components/common/Button';
 import { ProductCard } from '../components/product/ProductCard';
 import { ProductCardSkeleton } from '../components/product/ProductCardSkeleton';
-import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, isProductEffectivelyPinned } from '../lib/catalogQueries';
+import { getAllAnimeSeries, fetchAnimeThumbnails, fetchCustomAnimeSeriesFromDB, type AnimeSeriesEntry, getCachedPinnedProductIds, fetchPinnedProductIds, isProductEffectivelyPinned } from '../lib/catalogQueries';
 
 // Curated Anime Merch Facets
 const FINISH_FACETS = [
@@ -151,7 +151,7 @@ export const Shop: React.FC = () => {
   const [pinnedProductIds, setPinnedProductIds] = useState<string[]>(() => getCachedPinnedProductIds());
 
   useEffect(() => {
-    fetchAnimeThumbnails().then(() => {
+    Promise.all([fetchAnimeThumbnails(), fetchCustomAnimeSeriesFromDB()]).then(() => {
       setAnimeSeriesList(getAllAnimeSeries());
     });
 
@@ -159,6 +159,7 @@ export const Shop: React.FC = () => {
       setAnimeSeriesList(getAllAnimeSeries());
     };
     window.addEventListener('anime_thumbnails_updated', handleUpdate);
+    window.addEventListener('anime_custom_series_updated', handleUpdate);
 
     fetchPinnedProductIds().then(setPinnedProductIds);
     const handlePinnedUpdated = (e: any) => {
@@ -172,6 +173,7 @@ export const Shop: React.FC = () => {
 
     return () => {
       window.removeEventListener('anime_thumbnails_updated', handleUpdate);
+      window.removeEventListener('anime_custom_series_updated', handleUpdate);
       window.removeEventListener('pinned_products_updated', handlePinnedUpdated);
     };
   }, []);

@@ -11,7 +11,7 @@ import {
 import { useCatalogStore } from '../store/useCatalogStore';
 import { ProductCard } from '../components/product/ProductCard';
 import { fetchHeroConfig, getCachedHeroConfig, type HeroBannerConfig } from '../lib/heroConfig';
-import { getAllAnimeSeries, fetchAnimeThumbnails, type AnimeSeriesEntry } from '../lib/catalogQueries';
+import { getAllAnimeSeries, fetchAnimeThumbnails, fetchCustomAnimeSeriesFromDB, type AnimeSeriesEntry } from '../lib/catalogQueries';
 
 
 
@@ -36,7 +36,8 @@ export const Home: React.FC = () => {
     window.addEventListener('hero_banner_updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
-    fetchAnimeThumbnails().then(() => {
+    // Cross-device sync for anime subcategories & thumbnails
+    Promise.all([fetchAnimeThumbnails(), fetchCustomAnimeSeriesFromDB()]).then(() => {
       setAnimeUniverses(getAllAnimeSeries().filter((s) => s.id !== 'all'));
     });
 
@@ -44,11 +45,13 @@ export const Home: React.FC = () => {
       setAnimeUniverses(getAllAnimeSeries().filter((s) => s.id !== 'all'));
     };
     window.addEventListener('anime_thumbnails_updated', handleAnimeThumbnailsUpdate);
+    window.addEventListener('anime_custom_series_updated', handleAnimeThumbnailsUpdate);
 
     return () => {
       window.removeEventListener('hero_banner_updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('anime_thumbnails_updated', handleAnimeThumbnailsUpdate);
+      window.removeEventListener('anime_custom_series_updated', handleAnimeThumbnailsUpdate);
     };
   }, [initializeCatalog]);
 

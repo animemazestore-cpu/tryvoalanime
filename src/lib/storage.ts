@@ -23,8 +23,77 @@ export const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 /**
+ * Compresses an image file client-side to keep uploads fast and fallback URLs lightweight (< 50KB)
+ */
+export const compressImageIfNeeded = async (
+  file: File,
+  maxDimension = 900,
+  quality = 0.82
+): Promise<{ file: File; dataUrl: string }> => {
+  if (typeof window === 'undefined' || !file.type.startsWith('image/')) {
+    const dataUrl = await fileToDataUrl(file);
+    return { file, dataUrl };
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                });
+                resolve({ file: compressedFile, dataUrl });
+              } else {
+                resolve({ file, dataUrl });
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        } else {
+          resolve({ file, dataUrl: (e.target?.result as string) || '' });
+        }
+      };
+      img.onerror = () => {
+        resolve({ file, dataUrl: (e.target?.result as string) || '' });
+      };
+      img.src = (e.target?.result as string) || '';
+    };
+    reader.onerror = () => {
+      fileToDataUrl(file).then((dataUrl) => resolve({ file, dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Uploads a single file to Supabase Storage bucket.
- * Returns public URL on success, or falls back to local data URL if bucket is unreachable.
+ * Returns public URL on success, or falls back to lightweight local data URL if bucket is unreachable.
  */
 export const uploadFileToStorage = async (
   file: File,
@@ -43,36 +112,49 @@ export const uploadFileToStorage = async (
     };
   }
 
-  // 2. Prepare clean path
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const cleanName = file.name
-    .substring(0, file.name.lastIndexOf('.') || file.name.length)
+  // 2. Compress image if needed for performance and small size
+  let activeFile = file;
+  let compressedDataUrl = '';
+  if (file.type.startsWith('image/')) {
+    try {
+      const compressed = await compressImageIfNeeded(file);
+      activeFile = compressed.file;
+      compressedDataUrl = compressed.dataUrl;
+    } catch {
+      activeFile = file;
+    }
+  }
+
+  // 3. Prepare clean path
+  const ext = activeFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const cleanName = activeFile.name
+    .substring(0, activeFile.name.lastIndexOf('.') || activeFile.name.length)
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .substring(0, 40);
   const fileName = `${Date.now()}_${cleanName}.${ext}`;
   const filePath = folder ? `${folder}/${fileName}` : fileName;
 
   try {
-    // 3. Attempt Supabase upload
+    // 4. Attempt Supabase upload
     const { error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(filePath, file, {
+      .upload(filePath, activeFile, {
         cacheControl: '3600',
         upsert: true,
       });
 
     if (uploadError) {
-      console.warn(`Supabase Storage upload error on bucket '${bucket}':`, uploadError);
-      // If upload failed (e.g. bucket doesn't exist yet or offline), fall back to base64 so admin is not blocked
-      const fallbackUrl = await fileToDataUrl(file);
+      console.warn(`Supabase Storage upload notice on bucket '${bucket}':`, uploadError.message);
+      // If upload failed, use lightweight compressed data URL
+      const fallbackUrl = compressedDataUrl || (await fileToDataUrl(activeFile));
       return {
         url: fallbackUrl,
-        error: `Supabase Storage upload warning (${uploadError.message}). Using local preview fallback. Please ensure the '${bucket}' bucket exists and is public in Supabase.`,
+        error: `Supabase Storage upload warning (${uploadError.message}). Using compressed preview fallback.`,
         isFallback: true,
       };
     }
 
-    // 4. Retrieve public URL
+    // 5. Retrieve public URL
     const { data: publicData } = supabase.storage
       .from(bucket)
       .getPublicUrl(filePath);
@@ -81,15 +163,15 @@ export const uploadFileToStorage = async (
       return { url: publicData.publicUrl };
     }
 
-    const fallbackUrl = await fileToDataUrl(file);
+    const fallbackUrl = compressedDataUrl || (await fileToDataUrl(activeFile));
     return { url: fallbackUrl, isFallback: true };
   } catch (err: any) {
-    console.warn('Storage upload exception, falling back to local preview:', err);
+    console.warn('Storage upload exception, falling back to compressed preview:', err);
     try {
-      const fallbackUrl = await fileToDataUrl(file);
+      const fallbackUrl = compressedDataUrl || (await fileToDataUrl(activeFile));
       return {
         url: fallbackUrl,
-        error: err?.message || 'Storage error. Using local preview.',
+        error: err?.message || 'Storage error. Using compressed preview.',
         isFallback: true,
       };
     } catch {

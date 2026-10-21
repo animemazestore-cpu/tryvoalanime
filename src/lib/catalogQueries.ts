@@ -180,7 +180,7 @@ export const FALLBACK_CATEGORIES: Category[] = [
   },
 ];
 
-export { DEFAULT_ANIME_SERIES as ANIME_SERIES_LIST, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, fetchCustomAnimeSeriesFromDB, saveCustomAnimeSeriesList } from './animeSubcategories';
+export { DEFAULT_ANIME_SERIES as ANIME_SERIES_LIST, getAllAnimeSeries, fetchAnimeThumbnails, saveAnimeSeriesThumbnail, fetchCustomAnimeSeriesFromDB, saveCustomAnimeSeriesList, syncAllAnimeSubcategoriesToCloud } from './animeSubcategories';
 export type { AnimeSeriesEntry } from './animeSubcategories';
 export {
   getCachedPinnedProductIds,
