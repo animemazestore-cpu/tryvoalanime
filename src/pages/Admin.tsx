@@ -4502,6 +4502,24 @@ export const Admin: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-2.5">
+                  {reviews.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await syncReviewsMultiChannel(reviews);
+                          alert(`🎉 Cloud Sync Successful!\n\n• ${reviews.length} reviews broadcast to the database.\n• Status: ${res.directDbSuccess ? 'Direct DB & Cloud Sync Active' : 'Cloud Broadcast Active (Visible on all devices)'}`);
+                        } catch (err: any) {
+                          alert(`Sync notice: ${err?.message || err}`);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition border border-emerald-300 shadow-sm"
+                      title="Broadcast all reviews to cloud DB so all devices see them immediately"
+                    >
+                      <RefreshCcw className="h-4 w-4 text-emerald-600" />
+                      <span>Sync {reviews.length} Reviews to Cloud Now</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={downloadSampleReviewsJson}
                     className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition border border-gray-300 shadow-sm"
